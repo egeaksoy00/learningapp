@@ -104,16 +104,15 @@ void DrawLinkedListPicture() {
                              Color{225, 226, 255, 255});
         DrawText(TextFormat("%d", (i + 1) * 10), x + 42, 547, 22, DARKBLUE);
 
-        if (i < 2) {
-            DrawLine(x + 120, 557, x + 165, 557, Color{80, 90, 230, 255});
-            DrawTriangle({(float)x + 165, 557}, {(float)x + 153, 551},
-                         {(float)x + 153, 563}, Color{80, 90, 230, 255});
-        }
+        // Every next link has an arrow, including the final nullptr link.
+        DrawLine(x + 120, 557, x + 165, 557, Color{80, 90, 230, 255});
+        DrawTriangle({(float)x + 165, 557}, {(float)x + 153, 551},
+                     {(float)x + 153, 563}, Color{80, 90, 230, 255});
 
         x = x + 165;
     }
 
-    DrawText("nullptr", x - 35, 548, 17, DARKGRAY);
+    DrawText("nullptr", x + 8, 548, 17, DARKGRAY);
 }
 
 int main() {
@@ -129,11 +128,13 @@ int main() {
         if (Clicked({270, 25, 120, 45})) {
             screen = 0;
             selectedAnswer = -1;
+            showHint = false;
         }
 
         if (Clicked({405, 25, 120, 45})) {
             screen = 1;
             selectedAnswer = -1;
+            showHint = false;
         }
 
         for (int i = 0; i < topicCount; i++) {

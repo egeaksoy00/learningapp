@@ -44,6 +44,22 @@ cmake --build build
 ./build/codepath-learning
 ```
 
+## Build on Windows
+
+Install Git, CMake 3.20 or newer, and Visual Studio 2022 with the
+**Desktop development with C++** workload (including a Windows SDK).
+Run these commands from the project folder in PowerShell:
+
+```powershell
+cmake -S . -B build
+cmake --build build --config Debug
+.\build\Debug\codepath-learning.exe
+```
+
+CMake downloads raylib 5.5 automatically if it is not installed. The first
+configuration needs an internet connection. After editing `src/main.cpp`,
+repeat the build and run commands.
+
 ## Good next milestones
 
 1. Add more Coding Exam 1 exercises and unit-test each reference solution.

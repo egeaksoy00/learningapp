@@ -31,6 +31,11 @@ add_executable(codepath-learning
     src/main.cpp
 )
 target_link_libraries(codepath-learning PRIVATE raylib)
+if(MSVC)
+    target_compile_options(codepath-learning PRIVATE /W4)
+else()
+    target_compile_options(codepath-learning PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 
 if(APPLE)
     target_link_libraries(codepath-learning PRIVATE
