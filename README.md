@@ -1,25 +1,23 @@
-# CodePath - Interactive C/C++ Learning App
+# CodePath Studio
 
-CodePath is a raylib starter application for studying C and C++ through short lessons,
-visual memory models, and immediate practice feedback. The initial curriculum is organized
-around the supplied lecture notes and Coding Exam 1/2 preparation material.
+CodePath Studio is an offline C and C++ learning application built with C++17 and raylib.
+The application and curriculum are contained in src/main.cpp.
 
-## Included
+- 22 lessons across C, C++, and exam practice, including the four original topics
+- Lesson, path, and mixed assessments with hints, explanations, typed output predictions,
+  results, retries, and review of missed questions
+- Six visual labs covering pointer aliasing, arrays, allocation lifetime, recursion,
+  linked insertion, and bubble sort
+- A syntax notebook with line numbers, indentation, selection, clipboard, and undo/redo
+- Actual C17 and C++17 compilation, diagnostics, and a four-case coding challenge on
+  Windows with Visual Studio 2022
+- Local progress, per-path statistics, XP, and mastery achievements
 
-- Four topics: C Basics, Coding Exam 1, Pointers, and Linked Lists
-- A simple lesson screen
-- A four-answer quiz screen with hints and feedback
-- Small pointer and linked-list drawings
+Visual labs model fixed examples and use symbolic addresses. Notebook edits stay in
+memory for the current session. After building, the app works offline without an account.
 
-The app intentionally does not call an online AI service yet. The first milestone keeps
-feedback deterministic, easy to test, and safe to run offline. A later milestone can add a
-provider-neutral tutor interface and connect it to an approved model endpoint.
-
-## Code layout
-
-```text
-src/main.cpp    The entire application
-```
+Use **F11** or the sidebar fullscreen button to enter and leave borderless
+fullscreen. The diagrams, typography, and controls scale with the window.
 
 ## Build on macOS
 
@@ -60,11 +58,26 @@ CMake downloads raylib 5.5 automatically if it is not installed. The first
 configuration needs an internet connection. After editing `src/main.cpp`,
 repeat the build and run commands.
 
-## Good next milestones
+### Compile programs in the notebook
 
-1. Add more Coding Exam 1 exercises and unit-test each reference solution.
-2. Add the ten pointer-only lab functions as interactive challenges.
-3. Animate linked-list insertion and deletion one pointer update at a time.
-4. Save progress locally.
-5. Add a real AI tutor behind a small interface, with prompts grounded in the selected lesson.
+Launch the executable from an **x64 Developer PowerShell for VS 2022** so
+the compiler and Windows SDK environment are available. In Code notebook,
+choose C17 or C++17, load Hello sample, and select Build and run.
+Sum challenge supplies four inputs and checks the program's numeric output.
+The free-form runner closes standard input. Lesson excerpts may need includes
+and a main function before they can be compiled as programs.
 
+Run only code you trust. A Windows job object manages child process cleanup,
+and the runner stops on time or output limits. The program still runs with
+your account's permissions. This is not a sandbox. The macOS notebook supports
+editing and copying code for use with an external compiler.
+
+## Verify the build
+
+Pass --self-test to the executable to check curriculum data, quiz resets,
+editor history, and progress save/load with a temporary profile.
+From an x64 Developer PowerShell, pass --self-test-compiler to verify C and C++
+output, all four challenge cases, compiler error capture, and the execution timeout.
+
+The app saves mastery, attempts, and the last lesson in CodePathStudio/progress-v1.txt
+under the local application data folder on MSVC Windows or the home directory on macOS.
