@@ -267,6 +267,59 @@ const Lab visualLabs[] = {
     {"Bubble sort", "Adjacent comparisons move the largest element right during the first pass.",
      {"Start with [5, 2, 4]", "Compare 5 and 2, then swap", "Compare 5 and 4, then swap", "Compare 2 and 4, no swap"}}
 };
+struct SortFrame {
+    std::array<int,3> values;
+    int left=-1;
+    bool swapped=false;
+};
+
+std::vector<SortFrame> SortTrace(std::array<int,3> values) {
+    std::vector<SortFrame> trace{{values}};
+    for(int end=2;end>0;--end) {
+        bool changed=false;
+        for(int left=0;left<end;++left) {
+            trace.push_back({values,left,false});
+            if(values[left]>values[left+1]) {
+                std::swap(values[left],values[left+1]);
+                trace.push_back({values,left,true});
+                changed=true;
+            }
+        }
+        if(!changed) break;
+    }
+    trace.push_back({values});
+    return trace;
+}
+
+std::string SortStep(const std::vector<SortFrame>& trace,int step) {
+    const auto& frame=trace[step];
+    if(step==0) return "Start with the input order";
+    if(step+1==static_cast<int>(trace.size())) return "Sorted in ascending order";
+    return std::string(frame.swapped ? "Swap positions " : "Compare positions ")+
+           std::to_string(frame.left)+" and "+std::to_string(frame.left+1);
+}
+
+void DrawSort(const std::vector<SortFrame>& trace,int step,float transition,Rectangle stage) {
+    const auto& frame=trace[step];
+    float gap=std::min(24.0f,stage.width*0.05f);
+    float barWidth=std::min(120.0f,(stage.width-4*gap)/3);
+    float left=stage.x+(stage.width-3*barWidth-2*gap)/2;
+    float base=stage.y+stage.height-82;
+    float available=std::max(70.0f,stage.height-177);
+    DrawLineEx({left-gap,base},{left+3*barWidth+3*gap,base},2,muted);
+    for(int i=0;i<3;++i) {
+        bool selected=frame.left>=0 && (i==frame.left || i==frame.left+1);
+        int from=frame.swapped && selected ? 2*frame.left+1-i : i;
+        float position=from+(i-from)*transition;
+        float x=left+position*(barWidth+gap);
+        float height=available*(0.22f+0.75f*frame.values[i]/9.0f);
+        Color color=selected ? (frame.swapped ? mint : violet) : Color{74,112,177,255};
+        DrawRectangleGradientV(static_cast<int>(x),static_cast<int>(base-height),static_cast<int>(barWidth),
+                               static_cast<int>(height),color,Fade(color,0.42f));
+        Text(TextFormat("%d",frame.values[i]),x+barWidth/2-9,base-height-32,24,ink,true);
+        Text(TextFormat("[%d]",i),left+i*(barWidth+gap)+barWidth/2-14,base+12,16,muted,true);
+    }
+}
 void Cell(float x, float y, const char* label, const char* value, bool active, float scale) {
     Card({x,y,125*scale,74*scale}, active ? Color{38,88,83,255} : Color{40,56,80,255});
     DrawRectangleRec({x+10*scale,y+63*scale,105*scale,2*scale},active ? mint : Color{85,106,137,255});
@@ -282,7 +335,7 @@ void Arrow(float x, float y, float end, float endY, float scale) {
     DrawLineEx(a,b,2.5f*scale,mint);
     DrawTriangle(b,right,left,mint);
 }
-void Model(int lab, int step, Rectangle bounds) {
+void Model(int lab, int step, Rectangle bounds, float transition) {
     const float widths[]={345,415,345,415,563,415};
     const float heights[]={74,121,74,121,160,74};
     float scale=std::min({1.8f,(bounds.width-36)/widths[lab],(bounds.height-56)/heights[lab]});
@@ -293,7 +346,9 @@ void Model(int lab, int step, Rectangle bounds) {
         ::Cell(originX+cx*scale,originY+cy*scale,label,value,active,scale);
     };
     auto Arrow=[&](float ax,float ay,float bx,float by) {
-        ::Arrow(originX+ax*scale,originY+ay*scale,originX+bx*scale,originY+by*scale,scale);
+        float progress=0.25f+0.75f*transition;
+        ::Arrow(originX+ax*scale,originY+ay*scale,
+                originX+(ax+(bx-ax)*progress)*scale,originY+(ay+(by-ay)*progress)*scale,scale);
     };
     auto Text=[&](const char* s,float tx,float ty,float size,Color color,bool code=false) {
         ::Text(s,originX+tx*scale,originY+ty*scale,size*scale,color,code);
@@ -323,10 +378,11 @@ void Model(int lab, int step, Rectangle bounds) {
     } else {
         Cell(x,y,"head","10");
         Cell(x+320,y,"tail","30");
-        if (step >= 1) Cell(x+160,step == 3 ? y : y+86,"new node","20",true);
+        if (step >= 1) Cell(x+160,step == 3 ? y+86*(1-transition) : y+86,"new node","20",true);
         if (step == 3) {
-            Arrow(x+128,y+37,x+156,y+37);
-            Arrow(x+288,y+37,x+316,y+37);
+            float newY=y+37+86*(1-transition);
+            Arrow(x+128,y+37,x+156,newY);
+            Arrow(x+288,newY,x+316,y+37);
         } else {
             Arrow(x+128,y+37,x+316,y+37);
             if (step == 2) Arrow(x+286,y+116,x+325,y+71);
@@ -386,23 +442,26 @@ struct Editor {
     size_t cursor = 0, anchor = 0;
     int scroll = 0;
     float horizontal = 0;
-    std::vector<std::string> undo, redo;
+    struct Revision { std::string code; size_t cursor, anchor; };
+    std::vector<Revision> undo, redo;
+    bool dragging=false;
 
     void Replace(const std::string& text) {
         size_t first = std::min(cursor,anchor), count = std::max(cursor,anchor)-first;
         if (code.size()-count+text.size() > 12000 || (count == 0 && text.empty())) return;
         if (undo.size() == 50) undo.erase(undo.begin());
-        undo.push_back(code);
+        undo.push_back({code,cursor,anchor});
         redo.clear();
         code.replace(first,count,text);
         cursor = anchor = first+text.size();
     }
-    void History(std::vector<std::string>& from, std::vector<std::string>& to) {
+    void History(std::vector<Revision>& from, std::vector<Revision>& to) {
         if (from.empty()) return;
-        to.push_back(code);
-        code = std::move(from.back());
+        to.push_back({code,cursor,anchor});
+        code = std::move(from.back().code);
+        cursor=from.back().cursor;
+        anchor=from.back().anchor;
         from.pop_back();
-        cursor = anchor = std::min(cursor,code.size());
     }
     size_t Start(size_t at) const {
         if (at == 0) return 0;
@@ -431,7 +490,8 @@ struct Editor {
             if (!shift) scroll -= static_cast<int>(wheel.y*3);
             horizontal = std::max(0.0f,horizontal-(wheel.x+(shift ? wheel.y : 0))*55);
             scroll = std::clamp(scroll,0,std::max(0,rowCount()-rows));
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            bool click=IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+            if (click || (dragging && IsMouseButtonDown(MOUSE_BUTTON_LEFT))) {
                 int row = scroll+std::max(0,static_cast<int>((mouse.y-r.y-9)/rowHeight));
                 size_t start = 0;
                 while (row-- > 0 && End(start)<code.size()) start = End(start)+1;
@@ -439,9 +499,11 @@ struct Editor {
                 size_t end = End(start);
                 float target = mouse.x-r.x-54+horizontal;
                 while (cursor<end && target >= (Prefix(start,cursor-start)+Prefix(start,cursor-start+1))/2) ++cursor;
-                if (!shift) anchor = cursor;
+                if (click && !shift) anchor = cursor;
+                dragging=true;
             }
         }
+        if(!IsMouseButtonDown(MOUSE_BUTTON_LEFT)) dragging=false;
         size_t oldCursor = cursor;
         std::string oldCode = code;
         if (ctrl) {
@@ -512,6 +574,8 @@ struct Editor {
             size_t end=End(start);
             if (row>=scroll) {
                 float x=r.x+54-horizontal, y=r.y+9+(row-scroll)*rowHeight;
+                if(cursor>=start && cursor<=end)
+                    DrawRectangleRec({r.x+50,y,r.width-55,rowHeight},Color{32,46,68,255});
                 size_t first=std::max(start,std::min(cursor,anchor)), last=std::min(end,std::max(cursor,anchor));
                 if (first<last) {
                     float left=Prefix(start,first-start), right=Prefix(start,last-start);
@@ -671,6 +735,22 @@ enum Page { Home, Learn, Assess, Visualize, Notebook, Progress };
 int SelfTest() {
     auto lessons=Curriculum();
     bool passed=lessons.size()==22;
+    for(auto input:{std::array<int,3>{5,2,4},std::array<int,3>{9,5,1},
+                    std::array<int,3>{4,4,2},std::array<int,3>{1,4,9}}) {
+        auto trace=SortTrace(input);
+        passed=passed && trace.front().values==input;
+        std::sort(input.begin(),input.end());
+        passed=passed && trace.back().values==input;
+        for(size_t i=1;i<trace.size();++i) {
+            auto expected=trace[i-1].values;
+            if(trace[i].swapped) {
+                int left=trace[i].left;
+                passed=passed && left>=0 && left<2 && expected[left]>expected[left+1];
+                std::swap(expected[left],expected[left+1]);
+            }
+            passed=passed && trace[i].values==expected;
+        }
+    }
     for(const Lesson& lesson:lessons) {
         passed=passed && *lesson.title && *lesson.body && *lesson.code && *lesson.question &&
                *lesson.hint && *lesson.explanation;
@@ -778,6 +858,12 @@ int main(int argc, char** argv) {
     bool saved=true, playing=false, motion=true;
     bool fullscreenRequested=false;
     float timer=0, reward=0, displayed=0;
+    float labMotion=1, quizProgress=0;
+    int observedLab=-1, observedStep=-1, observedIndex=-1;
+    const std::array<int,3> sortInputs[]={{5,2,4},{9,5,1},{4,4,2},{1,4,9}};
+    int sortInput=0;
+    auto sortTrace=SortTrace(sortInputs[sortInput]);
+    auto labCount=[&]{return static_cast<int>(lab==5 ? sortTrace.size() : visualLabs[lab].steps.size());};
     Page page=Home;
     QuizState quiz;
     Editor editor;
@@ -794,6 +880,13 @@ int main(int argc, char** argv) {
         editor.cursor=editor.anchor=0;
         editor.scroll=0;
         editor.horizontal=0;
+    };
+    auto openChallenge=[&] {
+        loadCode("#include <stdio.h>\n\nint main(void) {\n    int n;\n    if (scanf(\"%d\", &n) != 1) return 1;\n"
+                 "    int sum = 0;\n    // TODO: add the integers from 1 through n.\n    printf(\"%d\\n\", sum);\n}");
+        sumChallenge=true;
+        cppMode=false;
+        page=Notebook;
     };
 #endif
     std::mt19937 rng(std::random_device{}());
@@ -845,9 +938,22 @@ int main(int argc, char** argv) {
             timer+=dt*(speed==0 ? 0.5f : speed==1 ? 1.0f : 2.0f);
             if(timer>=1.15f) {
                 timer=0;
-                if(step+1<static_cast<int>(visualLabs[lab].steps.size())) ++step;
+                if(step+1<labCount()) ++step;
                 else playing=false;
             }
+        }
+        if(observedLab!=lab || observedStep!=step) {
+            labMotion=0;
+            observedLab=lab;
+            observedStep=step;
+        }
+        labMotion=motion ? std::min(1.0f,labMotion+dt*5) : 1;
+        float eased=labMotion*labMotion*(3-2*labMotion);
+        if(page!=Assess || quiz.questions.empty() || observedIndex>static_cast<int>(quiz.index)) quizProgress=0;
+        observedIndex=static_cast<int>(quiz.index);
+        if(page==Assess && !quiz.questions.empty()) {
+            float target=(quiz.index+(quiz.selected!=-1 ? 1.0f : 0.0f))/quiz.questions.size();
+            quizProgress+=(target-quizProgress)*(motion ? std::min(1.0f,dt*12) : 1);
         }
 
         BeginDrawing();
@@ -926,7 +1032,11 @@ int main(int argc, char** argv) {
             Text("Test your recall",x+half+33,activityY+44,26);
             if(activityHeight>157)
                 Wrap("Eight questions drawn from all three learning paths.",x+half+33,activityY+81,half-38,18);
-            if(Button({x+half+33,activityY+activityHeight-56,181,42},"Mixed assessment")) mixed();
+            float practiceButton=(half-51)/2;
+            if(Button({x+half+33,activityY+activityHeight-56,practiceButton,42},"Mixed assessment")) mixed();
+#ifdef _WIN32
+            if(Button({x+half+42+practiceButton,activityY+activityHeight-56,practiceButton,42},"Coding challenge")) openChallenge();
+#endif
         } else if(page==Learn) {
             float menu=std::clamp(width*0.25f,218.0f,292.0f),bx=x+menu+14,bw=width-menu-14;
             for(int i=0;i<4;++i)
@@ -1027,6 +1137,7 @@ int main(int argc, char** argv) {
                 Card({x,109,width,h-145});
                 Text(TextFormat("%s   /   QUESTION %d OF %d",item.title,static_cast<int>(quiz.index)+1,
                      static_cast<int>(quiz.questions.size())),x+20,130,15,mint);
+                Bar(x+24,154,width-48,quizProgress);
                 float yy=Wrap(item.question,x+24,167,width-48,29,ink)+9;
                 bool prediction=std::string(item.question)=="Predict the output.";
                 if(prediction ||
@@ -1104,24 +1215,33 @@ int main(int argc, char** argv) {
             EndScissorMode();
             Text("LIVE MODEL",stage.x+18,stage.y+17,14,mint);
             Text(visualLabs[lab].name,stage.x+18,stage.y+38,26);
-            Model(lab,step,stage);
-            Text("Symbolic state",stage.x+18,stage.y+stage.height-31,15,muted);
+            if(lab==5) DrawSort(sortTrace,step,eased,stage);
+            else Model(lab,step,stage,eased);
+            if(lab==5) {
+                if(Button({stage.x+17,stage.y+stage.height-46,155,35},"Change input")) {
+                    sortInput=(sortInput+1)%static_cast<int>(std::size(sortInputs));
+                    sortTrace=SortTrace(sortInputs[sortInput]);
+                    step=0; playing=false; timer=0;
+                }
+            } else Text("Symbolic state",stage.x+18,stage.y+stage.height-31,15,muted);
 
             Card(guide);
             Text("STEP GUIDE",guide.x+16,guide.y+17,14,mint);
             float guideY=Wrap(visualLabs[lab].description,guide.x+16,guide.y+43,guide.width-32,18)+12;
-            int count=static_cast<int>(visualLabs[lab].steps.size());
+            int count=labCount();
             float stepHeight=std::min(43.0f,(guide.y+guide.height-guideY-10)/count);
             for(int i=0;i<count;++i) {
                 Rectangle row{guide.x+10,guideY+i*stepHeight,guide.width-20,stepHeight-4};
-                if(i==step) Card(row,Color{43,72,82,255});
+                bool hover=CheckCollisionPointRec(GetMousePosition(),row);
+                if(i==step || hover) Card(row,i==step ? Color{43,72,82,255} : rail);
                 Text(TextFormat("%02d",i+1),row.x+7,row.y+(row.height-14)/2,14,i==step ? mint : muted,true);
                 Clip(row.x+34,row.y,row.width-36,row.height);
                 float size=16;
-                const char* code=visualLabs[lab].steps[i];
-                while(size>11 && MeasureTextEx(mono,code,size,0.5f).x>row.width-40) --size;
-                Text(code,row.x+34,row.y+(row.height-size)/2,size,i==step ? ink : muted,true);
+                std::string code=lab==5 ? SortStep(sortTrace,i) : visualLabs[lab].steps[i];
+                while(size>11 && MeasureTextEx(mono,code.c_str(),size,0.5f).x>row.width-40) --size;
+                Text(code.c_str(),row.x+34,row.y+(row.height-size)/2,size,i==step ? ink : muted,true);
                 EndScissorMode();
+                if(hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) { step=i; playing=false; timer=0; }
             }
             Card({x,toolsY,width,87});
             Bar(x+15,toolsY+12,width-30,static_cast<float>(step+1)/count);
@@ -1146,11 +1266,7 @@ int main(int argc, char** argv) {
                                  : "#include <stdio.h>\n\nint main(void) {\n    puts(\"Hello, C!\");\n}");
                 sumChallenge=false;
             }
-            if(Button({x+233,135,137,35},"Sum challenge")) {
-                loadCode("#include <stdio.h>\n\nint main(void) {\n    int n;\n    if (scanf(\"%d\", &n) != 1) return 1;\n"
-                         "    int sum = 0;\n    // TODO: add the integers from 1 through n.\n    printf(\"%d\\n\", sum);\n}");
-                sumChallenge=true;
-            }
+            if(Button({x+233,135,137,35},"Sum challenge")) openChallenge();
             bool running=job.valid();
             if(Button({x+378,135,181,35},running ? "Working..." : sumChallenge ? "Run four tests" : "Build and run",!running) && !running) {
                 console="Compiling...";

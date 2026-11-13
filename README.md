@@ -19,6 +19,11 @@ memory for the current session. After building, the app works offline without an
 Use **F11** or the sidebar fullscreen button to enter and leave borderless
 fullscreen. The diagrams, typography, and controls scale with the window.
 
+In Visual Labs, click a step in the guide to jump to it. Bubble Sort has
+four input presets and shows comparisons separately from swaps. The sidebar
+motion control also applies to lab transitions. On Windows, open the sum
+exercise directly from the Overview using **Coding challenge**.
+
 ## Build on macOS
 
 Install raylib once:
