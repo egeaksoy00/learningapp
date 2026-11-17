@@ -71,40 +71,40 @@ void DrawScene(int lab,int step,float time,Rectangle r) {
             bool arriving=step<4 && i==count-1;
             float offset=arriving ? (1-appear)*42 : 0;
             box(r.x+18+offset,r.y+6+i*stride,width,frameHeight,"STACK FRAME",
-                TextFormat("factorial(%d)",4-i),i==count-1 ? mint : violet,arriving ? appear : 1);
+                TextFormat("factorial(%d)",4-i),i==count-1 ? led : codeType,arriving ? appear : 1);
         }
         if(step>=4) {
             float y=r.y+10+std::max(0,count-1)*stride;
             if(time<1)
                 box(r.x+18+appear*40,r.y+6+count*stride,width,frameHeight,"RETURNING FRAME",
-                    TextFormat("factorial(%d)",4-count),violet,1-appear);
+                    TextFormat("factorial(%d)",4-count),codeType,1-appear);
             float tokenX=r.x+width+31;
             float tokenY=y+(count>0 ? stride : 0)*(1-detail);
             box(tokenX,tokenY,std::min(141.0f,r.width-width-43),frameHeight,
-                count ? "RETURN VALUE" : "FINAL RESULT",TextFormat("%d",returns[step-4]),mint,appear);
+                count ? "RETURN VALUE" : "FINAL RESULT",TextFormat("%d",returns[step-4]),led,appear);
         }
         return;
     }
     float width=std::min(200.0f,(r.width-85)/2);
     float left=middle-width-29, right=middle+29;
-    Text(lab==2 ? "CALL STACK" : "LOCAL VARIABLES",left,r.y+8,15,violet);
-    Text(lab==2 ? "DYNAMIC STORAGE" : "CONCEPTUAL MEMORY",right,r.y+8,15,mint);
+    Text(lab==2 ? "CALL STACK" : "LOCAL VARIABLES",left,r.y+8,15,codeType);
+    Text(lab==2 ? "DYNAMIC STORAGE" : "CONCEPTUAL MEMORY",right,r.y+8,15,led);
     DrawLineEx({middle,r.y+5},{middle,r.y+r.height-12},1,Fade(muted,0.35f));
     if(lab==0) {
         box(right,base-34+(step==0 ? (1-appear)*28 : 0),width,72,"score / 0x100",
-            step==0 ? "uninitialized" : step>=4 ? "20" : "15",mint,step==0 ? appear : 1);
+            step==0 ? "uninitialized" : step>=4 ? "20" : "15",led,step==0 ? appear : 1);
         if(step>=2)
             box(left-(step==2 ? (1-appear)*28 : 0),base-34,width,72,"pointer p",
-                step==5 ? "nullptr" : "0x100",violet,step==2 ? appear : 1);
+                step==5 ? "nullptr" : "0x100",codeType,step==2 ? appear : 1);
         if(step>=3)
-            box(right,base+43,width,54,"copy","15",violet,step==3 ? detail : 1);
+            box(right,base+43,width,54,"copy","15",codeType,step==3 ? detail : 1);
     } else {
         box(left,base-34-(step==0 ? (1-appear)*32 : 0),width,72,"function frame",
             step==0 ? "enter" : step==1 ? "p = null" : step==4 ? "p expired" : step==5 ? "returned" : "p = 0x800",
-            violet,step==0 ? appear : step==5 ? 1-appear : 1);
+            codeType,step==0 ? appear : step==5 ? 1-appear : 1);
         if(step>=2 && step<=4)
             box(right+(step==2 ? (1-appear)*28 : 0),base-34,width,72,"heap / 0x800",
-                step==2 ? "unset" : step==3 ? "42" : "released",step==4 ? pink : mint,
+                step==2 ? "unset" : step==3 ? "42" : "released",step==4 ? errorColor : led,
                 step==2 ? appear : step==4 ? 1-0.65f*appear : 1);
     }
     if(step>=2 && step<=(lab==0 ? 4 : 3)) {
@@ -113,7 +113,7 @@ void DrawScene(int lab,int step,float time,Rectangle r) {
         if(step>=3) {
             bool reading=lab==0 && step==3;
             float point=reading ? b-(b-a)*appear : a+(b-a)*appear;
-            DrawCircleV({point,base},6,step==3 && lab==0 ? violet : mint);
+            DrawCircleV({point,base},6,step==3 && lab==0 ? codeType : led);
         }
     }
 }
