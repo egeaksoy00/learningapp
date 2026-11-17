@@ -83,9 +83,10 @@ repeat the build and run commands.
 
 ### Compile programs in the notebook
 
-Launch the executable from an **x64 Developer PowerShell for VS 2022** so
-the compiler and Windows SDK environment are available. In Code notebook,
-choose C17 or C++17, load Hello sample, and select Build and run.
+Launch the executable from a normal PowerShell window. The app finds the
+installed Visual Studio 2022 C++ tools and loads their build environment.
+In Code notebook, choose C17 or C++17, load Hello sample, and select
+Build and run.
 Sum challenge supplies four inputs and checks the program's numeric output.
 The free-form runner closes standard input. Lesson excerpts may need includes
 and a main function before they can be compiled as programs.
@@ -99,7 +100,7 @@ editing and copying code for use with an external compiler.
 
 Pass --self-test to the executable to check curriculum data, quiz resets,
 editor history, and progress save/load with a temporary profile.
-From an x64 Developer PowerShell, pass --self-test-compiler to verify C and C++
+From a normal PowerShell window, pass --self-test-compiler to verify C and C++
 output, all four challenge cases, compiler error capture, and the execution timeout.
 
 The app saves mastery, attempts, and the last lesson in CodePathStudio/progress-v1.txt
