@@ -19,7 +19,10 @@ memory for the current session. After building, the app works offline without an
 Use **F11** or the sidebar fullscreen button to enter and leave borderless
 fullscreen. The diagrams, typography, and controls scale with the window.
 
-In Visual Labs, click a step in the guide to jump to it. Bubble Sort has
+In Visual Labs, click a step in the guide or drag along the playback timeline
+to jump to a step. Pointer, heap, recursion, and linked-list demonstrations show
+captions synchronized with the current operation. Array Traversal offers three
+input presets and computes the running total from their elements. Bubble Sort has
 four input presets and shows comparisons separately from swaps. The sidebar
 motion control also applies to lab transitions. On Windows, open the sum
 exercise directly from the Overview using **Coding challenge**.

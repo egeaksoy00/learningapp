@@ -273,6 +273,30 @@ struct SortFrame {
     bool swapped=false;
 };
 
+const char* LabCaption(int lab,int step) {
+    static const char* const captions[][6]={
+        {"Create score and store 15. Its address is symbolic.",
+         "Store the address of score in p. Both names can now reach the same object.",
+         "Dereference p and write 20. The original score changes.",
+         "Clear p. The local score still exists."},
+        {"Start with three elements and a total of zero.","Read the first element and add it.",
+         "Advance one element and add its value.","Add the last element. Stop before the end boundary."},
+        {"Enter the function. The local pointer starts empty.",
+         "Allocate storage on the heap. The local pointer keeps its address.",
+         "Write through the pointer before reading the allocated value.",
+         "Release the heap block. Access through the old pointer is invalid.",
+         "Clear the local pointer. Returning from the function removes its frame."},
+        {"Call factorial with n = 3.","Suspend the caller and create a frame for n = 2.",
+         "Reach the base case. This call needs no further calls.",
+         "Return 1 and remove the base-case frame.",
+         "Multiply 2 by the returned 1, then return 2.",
+         "Multiply 3 by 2. The final result is 6 and the stack unwinds."},
+        {"The head points directly to the tail.","Create a detached node.",
+         "Link the new node to the tail first.","Redirect the head link. The suffix is preserved."}
+    };
+    return captions[lab][step];
+}
+
 std::vector<SortFrame> SortTrace(std::array<int,3> values) {
     std::vector<SortFrame> trace{{values}};
     for(int end=2;end>0;--end) {
@@ -335,7 +359,7 @@ void Arrow(float x, float y, float end, float endY, float scale) {
     DrawLineEx(a,b,2.5f*scale,mint);
     DrawTriangle(b,right,left,mint);
 }
-void Model(int lab, int step, Rectangle bounds, float transition) {
+void Model(int lab, int step, Rectangle bounds, float transition, const std::array<int,3>& arrayValues) {
     const float widths[]={345,415,345,415,563,415};
     const float heights[]={74,121,74,121,160,74};
     float scale=std::min({1.8f,(bounds.width-36)/widths[lab],(bounds.height-56)/heights[lab]});
@@ -363,12 +387,12 @@ void Model(int lab, int step, Rectangle bounds, float transition) {
     } else if (lab == 1 || lab == 5) {
         const int sorted[][3] = {{5,2,4},{2,5,4},{2,4,5},{2,4,5}};
         for (int i=0;i<3;++i) {
-            Cell(x+i*145,y,TextFormat("a[%d]",i),TextFormat("%d",lab == 1 ? 2 << i : sorted[step][i]),
+            Cell(x+i*145,y,TextFormat("a[%d]",i),TextFormat("%d",lab == 1 ? arrayValues[i] : sorted[step][i]),
                  lab == 1 ? step == i+1 : step == 3);
         }
         if (lab == 1) {
-            const int total[] = {0,2,6,14};
-            Text(TextFormat("Accumulator = %d",total[step]),x,y+96,20,mint);
+            int total=std::accumulate(arrayValues.begin(),arrayValues.begin()+step,0);
+            Text(TextFormat("Accumulator = %d",total),x,y+96,20,mint);
         }
     } else if (lab == 3) {
         const int frames[] = {1,2,3,2,1,0};
@@ -732,6 +756,34 @@ std::string CompileAndRun(const std::string& code,bool cpp,bool challenge=false)
 #endif
 
 enum Page { Home, Learn, Assess, Visualize, Notebook, Progress };
+const char* LessonNote(int id) {
+    static const char* notes[]={
+        "Trace total after each iteration. For an array of length n, stop before index n.",
+        "Test 1900, 2000, and 2024. Checking divisibility by 4 alone accepts 1900 incorrectly.",
+        "Dereference a pointer only while it refers to a live object. Assigning null does not destroy score.",
+        "During insertion, save the successor before replacing the predecessor's link.",
+        "A declaration from a header lets the compiler check arguments against the library interface.",
+        "If scanf reports a failed conversion, avoid reading an uninitialized destination.",
+        "Use a floating-point operand when the fractional part is required.",
+        "Keep the accumulator outside the loop so its value survives each iteration.",
+        "A null terminator is a character with value zero. It differs from the digit '0'.",
+        "One-past pointers can mark the end of a range. Dereferencing them is invalid.",
+        "After free, aliases to the allocation cannot be used to access the former object.",
+        "Store fgetc's result in int and use ferror to distinguish an I/O failure from end of file.",
+        "Trace the return values separately from the calls. Limit the input to avoid signed overflow.",
+        "Assigning through an existing reference changes its referent. It does not rebind the reference.",
+        "The parameter types distinguish the overloads. Return type alone cannot do that.",
+        "After push_back, reacquire iterators if vector capacity changed.",
+        "Use a const member function for operations that inspect state without changing it.",
+        "A reference to the base can preserve virtual dispatch. Copying to a base object can slice the derived part.",
+        "Template arguments are checked when the relevant specialization is instantiated.",
+        "Use [begin, end) to express a range. It also represents an empty range when begin equals end.",
+        "Prefer a resource-owning object whose destructor releases its resource during unwinding.",
+        "After ownership moves, check the source before dereferencing it."
+    };
+    return notes[id];
+}
+
 int SelfTest() {
     auto lessons=Curriculum();
     bool passed=lessons.size()==22;
@@ -858,10 +910,13 @@ int main(int argc, char** argv) {
     bool saved=true, playing=false, motion=true;
     bool fullscreenRequested=false;
     float timer=0, reward=0, displayed=0;
-    float labMotion=1, quizProgress=0;
+    float labMotion=1, quizProgress=0, reveal=1;
+    Page previousPage=Home;
     int observedLab=-1, observedStep=-1, observedIndex=-1;
     const std::array<int,3> sortInputs[]={{5,2,4},{9,5,1},{4,4,2},{1,4,9}};
     int sortInput=0;
+    int arrayInput=0;
+    const std::array<int,3> arrayInputs[]={{2,4,8},{-3,7,2},{9,0,-9}};
     auto sortTrace=SortTrace(sortInputs[sortInput]);
     auto labCount=[&]{return static_cast<int>(lab==5 ? sortTrace.size() : visualLabs[lab].steps.size());};
     Page page=Home;
@@ -936,7 +991,7 @@ int main(int argc, char** argv) {
         reward=std::max(0.0f,reward-dt);
         if(page==Visualize && playing) {
             timer+=dt*(speed==0 ? 0.5f : speed==1 ? 1.0f : 2.0f);
-            if(timer>=1.15f) {
+                if(timer>=(lab==5 ? 1.25f : 3.5f)) {
                 timer=0;
                 if(step+1<labCount()) ++step;
                 else playing=false;
@@ -1069,8 +1124,8 @@ int main(int argc, char** argv) {
             Example(item.code,{bx+15,by+24,bw-30,codeHeight},19);
             if(hasPracticeNote) {
                 float noteY=by+codeHeight+37;
-                Text("TRY IT NEXT",bx+19,noteY,14,mint);
-                Wrap("Check your understanding or open the example in the code notebook.",
+                Text("WATCH FOR THIS",bx+19,noteY,14,mint);
+                Wrap(LessonNote(current),
                      bx+19,noteY+22,bw-38,18);
             }
             if(Button({bx+15,actions,112,37},"Practice",true)) startQuiz({current});
@@ -1216,14 +1271,20 @@ int main(int argc, char** argv) {
             Text("LIVE MODEL",stage.x+18,stage.y+17,14,mint);
             Text(visualLabs[lab].name,stage.x+18,stage.y+38,26);
             if(lab==5) DrawSort(sortTrace,step,eased,stage);
-            else Model(lab,step,stage,eased);
-            if(lab==5) {
+            else Model(lab,step,{stage.x,stage.y,stage.width,stage.height-55},eased,arrayInputs[arrayInput]);
+            if(lab==5 || lab==1) {
                 if(Button({stage.x+17,stage.y+stage.height-46,155,35},"Change input")) {
-                    sortInput=(sortInput+1)%static_cast<int>(std::size(sortInputs));
-                    sortTrace=SortTrace(sortInputs[sortInput]);
+                    if(lab==5) {
+                        sortInput=(sortInput+1)%static_cast<int>(std::size(sortInputs));
+                        sortTrace=SortTrace(sortInputs[sortInput]);
+                    } else arrayInput=(arrayInput+1)%static_cast<int>(std::size(arrayInputs));
                     step=0; playing=false; timer=0;
                 }
-            } else Text("Symbolic state",stage.x+18,stage.y+stage.height-31,15,muted);
+            } else {
+                Rectangle caption{stage.x+14,stage.y+stage.height-76,stage.width-28,64};
+                Card(caption,rail);
+                Wrap(LabCaption(lab,step),caption.x+12,caption.y+8,caption.width-24,17,ink);
+            }
 
             Card(guide);
             Text("STEP GUIDE",guide.x+16,guide.y+17,14,mint);
@@ -1238,13 +1299,21 @@ int main(int argc, char** argv) {
                 Clip(row.x+34,row.y,row.width-36,row.height);
                 float size=16;
                 std::string code=lab==5 ? SortStep(sortTrace,i) : visualLabs[lab].steps[i];
+                if(lab==1 && i==0) code=TextFormat("int a[] = {%d, %d, %d};",arrayInputs[arrayInput][0],
+                                                   arrayInputs[arrayInput][1],arrayInputs[arrayInput][2]);
                 while(size>11 && MeasureTextEx(mono,code.c_str(),size,0.5f).x>row.width-40) --size;
                 Text(code.c_str(),row.x+34,row.y+(row.height-size)/2,size,i==step ? ink : muted,true);
                 EndScissorMode();
                 if(hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) { step=i; playing=false; timer=0; }
             }
             Card({x,toolsY,width,87});
-            Bar(x+15,toolsY+12,width-30,static_cast<float>(step+1)/count);
+            Rectangle timeline{x+15,toolsY+4,width-30,21};
+            Bar(timeline.x,timeline.y+8,timeline.width,(step+1.0f)/count);
+            if(CheckCollisionPointRec(GetMousePosition(),timeline) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+                float fraction=(GetMousePosition().x-timeline.x)/timeline.width;
+                step=std::clamp(static_cast<int>(fraction*count),0,count-1);
+                playing=false; timer=0;
+            }
             float control=toolsY+27;
             if(Button({x+15,control,96,45},"Restart")) { step=0; playing=false; timer=0; }
             if(Button({x+120,control,83,45},"Back")) { step=std::max(0,step-1); playing=false; timer=0; }
@@ -1366,6 +1435,10 @@ int main(int argc, char** argv) {
             Card({w-203,31,179,38},Fade(panel,opacity));
             Text("+100 XP   /   MASTERY",w-190,42,15,Fade(mint,opacity));
         }
+        if(previousPage!=page) { previousPage=page; reveal=0; }
+        reveal=motion ? std::min(1.0f,reveal+dt*5) : 1;
+        if(reveal<1)
+            DrawRectangleRec({x,100,w-x,h-100},Fade(bg,0.28f*(1-reveal)*(1-reveal)));
         EndMode2D();
         EndDrawing();
     }
