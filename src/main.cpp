@@ -282,6 +282,7 @@ const Lab visualLabs[] = {
      {"Start with [5, 2, 4]", "Compare 5 and 2, then swap", "Compare 5 and 4, then swap", "Compare 2 and 4, no swap"}}
 };
 void Arrow(float x,float y,float end,float endY,float scale);
+#include "memory_board.inc"
 #include "scenes.inc"
 #include "lesson_explorer.inc"
 
@@ -939,7 +940,8 @@ int main(int argc, char** argv) {
     ReadProgress(save,scores,current);
     bool saved=true, playing=false, motion=true;
     bool fullscreenRequested=false, lessonDetail=false, phasePaused=false;
-    int lessonScroll=0,heroInspect=0,exploreStep=0,exploreValue=15;
+    MemoryBoard memoryBoard;
+    int lessonScroll=0,exploreStep=0,exploreValue=15,exploreBound=4;
     bool lessonExplore=false;
     float timer=0, reward=0, displayed=0;
     float labMotion=1, quizProgress=0, reveal=1;
@@ -1127,42 +1129,31 @@ int main(int argc, char** argv) {
         if(!saved) Text("Progress could not be saved",x,h-25,15,errorColor);
 
         if(page==Home) {
-            float split=x+width*0.48f;
-            float heroBottom=h*0.59f;
-            Text("PROGRAMMING LABORATORY",x,129,15,led);
-            float headline=std::min(62.0f,width*0.066f);
-            Text("Follow the",x,155,headline);
-            Text("memory.",x,155+headline,headline);
-            Wrap("Explore how C and C++ programs work, one operation at a time.",x,170+headline*2,split-x-27,20);
-            if(Button({x,heroBottom-59,183,44},"Continue learning",true)) {
+            float heroBottom=h*0.63f;
+            InstrumentHeading("MEMORY WORKBENCH",x,116,width);
+            float sideWidth=198;
+            DrawMemoryBoard(memoryBoard,{x,154,width-sideWidth-22,heroBottom-205},motion);
+            memoryBoard.Update(dt,motion);
+            float tools=x+width-sideWidth;
+            Text("EXECUTE",tools,161,15,led);
+            Text(TextFormat("p = 0x%X",0x100+4*memoryBoard.target),tools,189,22,ink,true);
+            Wrap("Select a cell to redirect p. Addresses are symbolic.",tools,228,sideWidth,17);
+            if(Button({tools,288,sideWidth,42},memoryBoard.writing ? "Writing..." : "Execute ++*p",true) && !memoryBoard.writing) {
+                memoryBoard.pendingTarget=memoryBoard.target;
+                memoryBoard.travel=0;
+                memoryBoard.writing=true;
+            }
+            if(Button({tools,338,sideWidth,40},"Open pointer lab")) {
+                lab=0; step=0; playing=false; timer=0; page=Visualize;
+            }
+            if(Button({x,heroBottom-40,183,36},"Continue learning",true)) {
                 path=0;
                 auto list=filter(path);
                 offset=std::max(0,static_cast<int>(std::find(list.begin(),list.end(),current)-list.begin())-2);
                 page=Learn;
             }
-            float artW=x+width-split, aY=152;
-            float cell=(artW-58)/2;
-            DrawRectangleGradientH(static_cast<int>(split),115,static_cast<int>(artW),
-                                   static_cast<int>(heroBottom-130),bg,rail);
-            for(float gx=split+10;gx<x+width;gx+=22)
-                for(float gy=124;gy<heroBottom-22;gy+=22) DrawCircleV({gx,gy},1,seam);
-            Text("LIVE MEMORY MODEL",split+14,aY,14,led);
-            float boxY=aY+62;
-            DrawLineEx({split+cell+14,boxY+28},{split+artW-cell-14,boxY+28},2,accent);
-            float pulse=motion ? static_cast<float>(std::fmod(GetTime()*0.48,1.0)) : 0.5f;
-            float pulseX=split+cell+14+(artW-2*cell-28)*pulse;
-            DrawCircleGradient(static_cast<int>(pulseX),static_cast<int>(boxY+28),11,Fade(led,0.55f),Fade(led,0));
-            DrawCircleV({pulseX,boxY+28},3,led);
-            if(Button({split+14,boxY,cell,57},"p  /  0x100",heroInspect==0)) heroInspect=0;
-            if(Button({split+artW-cell-14,boxY,cell,57},"score  /  15",heroInspect==1)) heroInspect=1;
-            Wrap(heroInspect==0 ? "p stores the address of score." : "score is an integer at symbolic address 0x100.",
-                 split+14,boxY+70,artW-28,18);
-            if(Button({split+14,heroBottom-59,181,44},"Open pointer lab")) {
-                lab=0; step=0; playing=false; timer=0; page=Visualize;
-            }
-
-            float routeY=heroBottom+15, routeW=width*0.65f;
-            Text("LEARNING PATHS",x,routeY,16,led);
+            float routeY=heroBottom+12, routeW=width*0.65f;
+            InstrumentHeading("LEARNING NETWORK",x,routeY,routeW-15);
             for(int i=0;i<2;++i) {
                 float row=routeY+32+i*65;
                 auto course=filter(i+1);
@@ -1175,13 +1166,18 @@ int main(int argc, char** argv) {
                     page=Learn;
                 }
                 float start=x+137,end=x+routeW-15;
-                DrawLineEx({start,row+20},{end,row+20},2,seam);
+                for(size_t j=1;j<course.size();++j) {
+                    float spacing=(end-start)/(course.size()-1);
+                    DrawLineEx({start+(j-1)*spacing,row+20+10*std::sin((j-1)*0.8f)},
+                               {start+j*spacing,row+20+10*std::sin(j*0.8f)},2,seam);
+                }
                 for(size_t j=0;j<course.size();++j) {
                     float px=start+(end-start)*j/(course.size()-1);
+                    float py=row+20+10*std::sin(j*0.8f);
                     bool complete=scores[course[j]].correct>0;
-                    bool hovered=CheckCollisionPointCircle(GetMousePosition(),{px,row+20},10);
-                    if(complete || hovered) DrawCircleGradient(static_cast<int>(px),static_cast<int>(row+20),10,Fade(led,0.5f),Fade(led,0));
-                    DrawCircleV({px,row+20},current==course[j] ? 6.0f : 4.0f,complete || current==course[j] || hovered ? led : muted);
+                    bool hovered=CheckCollisionPointCircle(GetMousePosition(),{px,py},10);
+                    if(complete || hovered) DrawCircleGradient(static_cast<int>(px),static_cast<int>(py),10,Fade(led,0.5f),Fade(led,0));
+                    DrawCircleV({px,py},current==course[j] ? 6.0f : 4.0f,complete || current==course[j] || hovered ? led : muted);
                     if(hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                         path=i+1; offset=static_cast<int>(j); pick(course[j]); page=Learn;
                     }
@@ -1235,7 +1231,7 @@ int main(int argc, char** argv) {
                 lessonExplore=!lessonExplore; lessonDetail=false;
             }
             if(lessonExplore) {
-                LessonExplorer(current,exploreValue,exploreStep,{bx+17,by,bw-34,actions-by});
+                LessonExplorer(current,exploreValue,exploreStep,exploreBound,{bx+17,by,bw-34,actions-by});
             } else if(lessonDetail && !details.empty()) {
                 Rectangle area{bx+15,by,bw-30,actions-by-15};
                 Card(area,rail);
@@ -1371,13 +1367,15 @@ int main(int argc, char** argv) {
                        && !quiz.prediction.empty()) record(quiz.prediction==item.answers[0] ? 0 : 1);
                     yy+=72;
                 } else {
+                    float answerWidth=(width-62)/2;
                     for(int i=0;i<4;++i) {
                         int choice=quiz.order[i];
                         bool marked=quiz.selected!=-1 && (quiz.selected==choice || choice==0);
-                        if(Button({x+24,yy+i*53,width-48,45},TextFormat("%c   %s",'A'+i,item.answers[choice]),
+                        if(Button({x+24+(i%2)*(answerWidth+14),yy+(i/2)*66,answerWidth,54},
+                                  TextFormat("%c   %s",'A'+i,item.answers[choice]),
                                   marked,choice==0 ? successColor : errorColor)) record(choice);
                     }
-                    yy+=222;
+                    yy+=139;
                 }
                 if(quiz.selected==-1) {
                     if(Button({x+24,yy,91,43},"Hint",quiz.hint)) quiz.hint=!quiz.hint;
@@ -1526,7 +1524,9 @@ int main(int argc, char** argv) {
             float workspaceHeight=h-workspaceY-59;
             DrawRectangleRec({x+editorWidth+6,workspaceY-31,1,workspaceHeight+31},seam);
             Text("SOURCE EDITOR",x,workspaceY-25,15,led);
-            Text(running ? "COMPILING AND RUNNING" : "BUILD & PROGRAM OUTPUT",x+editorWidth+15,workspaceY-25,15,led);
+            const char* outputTitle=running ? "COMPILING AND RUNNING" : console.empty() ? "OUTPUT  /  READY" :
+                console.find("Build failed")!=std::string::npos ? "OUTPUT  /  BUILD FAILED" : "OUTPUT  /  RUN REPORT";
+            Text(outputTitle,x+editorWidth+15,workspaceY-25,15,led);
             if(running) {
                 float pulse=motion ? static_cast<float>(std::fmod(GetTime()*0.6,1.0)) : 0.5f;
                 DrawRectangleRec({x+editorWidth+15+pulse*(column-35),workspaceY-5,35,2},led);
@@ -1599,9 +1599,13 @@ int main(int argc, char** argv) {
                 float track=(half-52)/list.size();
                 for(size_t i=0;i<list.size();++i) {
                     int id=list[i];
-                    Rectangle node{x+26+i*track,y+row-32,track-4,12};
-                    bool hover=CheckCollisionPointRec(GetMousePosition(),node);
-                    DrawRectangleRec(node,scores[id].correct ? led : hover ? muted : seam);
+                    Vector2 node{x+26+i*track+track/2,y+row-24-(i%2)*9};
+                    bool hover=CheckCollisionPointCircle(GetMousePosition(),node,10);
+                    if(i>0) DrawLineEx({node.x-track,y+row-24-((i-1)%2)*9},node,1,seam);
+                    if(hover || scores[id].correct)
+                        DrawCircleGradient(static_cast<int>(node.x),static_cast<int>(node.y),11,Fade(led,0.6f),Fade(led,0));
+                    DrawPoly(node,6,hover ? 7.0f : 5.0f,30,scores[id].correct ? led : muted);
+                    if(hover) Text(lessons[id].title,x+26,y+row-57,15,ink);
                     if(hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                         path=p; offset=static_cast<int>(i); pick(id); page=Learn;
                     }

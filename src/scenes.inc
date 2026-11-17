@@ -92,7 +92,8 @@ void DrawScene(int lab,int step,float time,Rectangle r) {
     DrawLineEx({middle,r.y+5},{middle,r.y+r.height-12},1,Fade(muted,0.35f));
     if(lab==0) {
         box(right,base-34+(step==0 ? (1-appear)*28 : 0),width,72,"score / 0x100",
-            step==0 ? "uninitialized" : step>=4 ? "20" : "15",led,step==0 ? appear : 1);
+            step==0 ? "uninitialized" : (step>4 || (step==4 && appear>=0.98f)) ? "20" : "15",
+            led,step==0 ? appear : 1);
         if(step>=2)
             box(left-(step==2 ? (1-appear)*28 : 0),base-34,width,72,"pointer p",
                 step==5 ? "nullptr" : "0x100",codeType,step==2 ? appear : 1);
@@ -113,7 +114,7 @@ void DrawScene(int lab,int step,float time,Rectangle r) {
         if(step>=3) {
             bool reading=lab==0 && step==3;
             float point=reading ? b-(b-a)*appear : a+(b-a)*appear;
-            DrawCircleV({point,base},6,step==3 && lab==0 ? codeType : led);
+            if(time<1) DataSignal({point,base},{point,base},0);
         }
     }
 }

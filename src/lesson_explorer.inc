@@ -1,4 +1,4 @@
-void LessonExplorer(int id,int& value,int& iteration,Rectangle r) {
+void LessonExplorer(int id,int& value,int& iteration,int& bound,Rectangle r) {
     InstrumentHeading("INTERACTIVE WALKTHROUGH",r.x,r.y,r.width);
     float y=r.y+43;
     if(id==2) {
@@ -12,11 +12,13 @@ void LessonExplorer(int id,int& value,int& iteration,Rectangle r) {
         Arrow(r.x+half+5,y+96,r.x+half+58,y+96,1);
         if(Button({r.x,y+144,133,38},"Write through p",true)) value=value==20 ? 15 : 20;
     } else if(id==7) {
-        Wrap("Execute each iteration of sum_to(4). The accumulator keeps its value between iterations.",
+        Wrap(TextFormat("Trace sum_to(%d). The condition i <= %d decides whether the loop body executes.",bound,bound),
              r.x,y,r.width,18);
         Text(TextFormat("i = %d   /   total = %d",iteration,iteration*(iteration+1)/2),r.x,y+66,24,led,true);
-        Bar(r.x,y+119,r.width,iteration/4.0f);
-        if(Button({r.x,y+144,133,38},iteration==4 ? "Replay" : "Next iteration",true)) iteration=(iteration+1)%5;
+        Text(iteration==bound ? "Next condition fails. Return total." : "Next iteration adds i to total.",r.x,y+100,16,muted);
+        Bar(r.x,y+126,r.width,static_cast<float>(iteration)/bound);
+        if(Button({r.x,y+144,133,38},iteration==bound ? "Replay" : "Next iteration",true)) iteration=(iteration+1)%(bound+1);
+        if(Button({r.x+145,y+144,140,38},"Change bound")) { bound=bound==8 ? 2 : bound+2; iteration=0; }
     } else {
         Wrap("Walk factorial(4) into its base case, then unwind. Each call has its own n.",
              r.x,y,r.width,18);
