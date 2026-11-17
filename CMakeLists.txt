@@ -31,6 +31,10 @@ add_executable(codepath-learning
     src/main.cpp
 )
 target_link_libraries(codepath-learning PRIVATE raylib)
+add_custom_command(TARGET codepath-learning POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets
+            $<TARGET_FILE_DIR:codepath-learning>/assets)
 if(MSVC)
     target_compile_options(codepath-learning PRIVATE /W4)
 else()

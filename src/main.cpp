@@ -158,19 +158,60 @@ void Clip(float x,float y,float w,float h) {
 }
 void Card(Rectangle r, Color c = panel) {
     float radius=std::min(0.32f,20.0f/std::min(r.width,r.height));
+    DrawRectangleRounded({r.x+1,r.y+5,r.width,r.height},radius,10,Fade(BLACK,0.32f));
     DrawRectangleRounded(r,radius,10,c);
+    DrawRectangleRoundedLinesEx(r,radius,10,1,Fade(seam,0.64f));
+    DrawLineEx({r.x+12,r.y+2},{r.x+r.width-12,r.y+2},1,Fade(ink,0.08f));
 }
 bool Button(Rectangle r, const char* s, bool active = false, Color tint = led) {
     bool hover = CheckCollisionPointRec(GetMousePosition(), r);
     Card(r, active ? litSurface : hover ? hoverSurface : rail);
-    if(active || hover) DrawRectangleRec({r.x,r.y+5,2,r.height-10},active ? tint : seam);
+    if(active || hover) {
+        DrawRectangleRoundedLinesEx(r,0.25f,10,1.3f,Fade(active ? tint : codeType,0.88f));
+        DrawRectangleRec({r.x+5,r.y+8,2,r.height-16},active ? tint : seam);
+    }
     float size=18;
     float available=r.width-20;
     while(size>13 && MeasureTextEx(ui,s,size,0.5f).x>available) --size;
     Clip(r.x,r.y,r.width,r.height);
-    Text(s, r.x + 10, r.y + (r.height - size) / 2, size, active ? tint : ink);
+    Text(s, r.x + 13, r.y + (r.height - size) / 2, size, active ? tint : ink);
     EndScissorMode();
     return hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+}
+void NavIcon(int id,Vector2 c,Color color) {
+    const float x=c.x,y=c.y;
+    if(id==0) {
+        DrawLineEx({x-9,y-1},{x,y-9},1.8f,color); DrawLineEx({x,y-9},{x+9,y-1},1.8f,color);
+        DrawRectangleLinesEx({x-7,y-2,14,12},1.7f,color);
+        DrawRectangleLinesEx({x-2,y+3,4,7},1.3f,color);
+    } else if(id==1) {
+        DrawLineEx({x,y-7},{x,y+9},1.5f,color);
+        DrawRectangleRoundedLinesEx({x-10,y-7,10,15},0.17f,5,1.6f,color);
+        DrawRectangleRoundedLinesEx({x,y-7,10,15},0.17f,5,1.6f,color);
+    } else if(id==2) {
+        DrawCircleLinesV(c,9,color); DrawCircleLinesV(c,5,color);
+        DrawLineEx({x,y},{x+9,y-9},1.7f,color);
+    } else if(id==3) {
+        DrawRectangleRoundedLinesEx({x-5,y-9,10,4},0.25f,5,1.6f,color);
+        DrawLineEx({x-3,y-5},{x-3,y},1.5f,color);
+        DrawLineEx({x+3,y-5},{x+3,y},1.5f,color);
+        DrawLineEx({x-3,y},{x-9,y+8},1.7f,color);
+        DrawLineEx({x+3,y},{x+9,y+8},1.7f,color);
+        DrawLineEx({x-9,y+8},{x+9,y+8},1.7f,color);
+    } else if(id==4) {
+        DrawLineEx({x-10,y},{x-4,y-6},1.8f,color);
+        DrawLineEx({x-10,y},{x-4,y+6},1.8f,color);
+        DrawLineEx({x+10,y},{x+4,y-6},1.8f,color);
+        DrawLineEx({x+10,y},{x+4,y+6},1.8f,color);
+        DrawLineEx({x+2,y-8},{x-2,y+8},1.8f,color);
+    } else {
+        DrawCircleLinesV({x,y-7},3,color);
+        DrawCircleLinesV({x-8,y+7},3,color);
+        DrawCircleLinesV({x+8,y+7},3,color);
+        DrawLineEx({x-1,y-4},{x-7,y+4},1.5f,color);
+        DrawLineEx({x+1,y-4},{x+7,y+4},1.5f,color);
+        DrawLineEx({x-5,y+7},{x+5,y+7},1.5f,color);
+    }
 }
 float Wrap(const char* s, float x, float y, float width, float size, Color color = muted) {
     std::istringstream words(s);
@@ -285,6 +326,7 @@ void Arrow(float x,float y,float end,float endY,float scale);
 #include "memory_board.inc"
 #include "scenes.inc"
 #include "lesson_explorer.inc"
+#include "pointer_lab.inc"
 
 struct SortFrame {
     std::array<int,3> values;
@@ -722,11 +764,53 @@ ProcessResult RunLocal(const std::filesystem::path& program, std::wstring comman
 
 #include "challenges.inc"
 
+bool PrepareCompilerEnvironment() {
+    wchar_t installed[32768]{};
+    if(GetEnvironmentVariableW(L"VCToolsInstallDir",installed,static_cast<DWORD>(std::size(installed)))>0)
+        return true;
+    auto installer=std::filesystem::path(L"C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe");
+    if(!std::filesystem::exists(installer)) return false;
+    std::error_code error;
+    auto folder=std::filesystem::temp_directory_path(error)/
+                ("codepath-compiler-"+std::to_string(std::random_device{}()));
+    if(error || !std::filesystem::create_directory(folder,error)) return false;
+    auto cleanup=[&] {
+        std::filesystem::remove(folder/"output.txt",error);
+        std::filesystem::remove(folder,error);
+    };
+    auto lookup=RunLocal(installer,L"vswhere.exe -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath",
+                         folder,5000);
+    if(!lookup.ok) { cleanup(); return false; }
+    std::string location=lookup.output.substr(0,lookup.output.find('\n'));
+    auto batch=std::filesystem::path(location)/L"Common7/Tools/VsDevCmd.bat";
+    if(location.empty() || !std::filesystem::exists(batch)) { cleanup(); return false; }
+    wchar_t system[32768]{};
+    if(!GetSystemDirectoryW(system,static_cast<UINT>(std::size(system)))) { cleanup(); return false; }
+    auto command=std::filesystem::path(system)/L"cmd.exe";
+    std::wstring arguments=L"cmd.exe /d /s /c \"\""+batch.wstring()+
+                           L"\" -no_logo -arch=x64 -host_arch=x64 >nul && set\"";
+    auto environment=RunLocal(command,arguments,folder,20000);
+    if(!environment.ok) { cleanup(); return false; }
+    std::istringstream lines(environment.output);
+    std::string line;
+    while(std::getline(lines,line)) {
+        size_t separator=line.find('=');
+        if(separator==std::string::npos || separator==0) continue;
+        std::wstring key(line.begin(),line.begin()+separator);
+        std::wstring value(line.begin()+separator+1,line.end());
+        SetEnvironmentVariableW(key.c_str(),value.c_str());
+    }
+    cleanup();
+    return GetEnvironmentVariableW(L"VCToolsInstallDir",installed,static_cast<DWORD>(std::size(installed)))>0;
+}
+
 std::string CompileAndRun(const std::string& code,bool cpp,int challenge=-1) {
+    if(!PrepareCompilerEnvironment())
+        return "C/C++ compiler not found. Install Visual Studio C++ build tools, then retry.";
     wchar_t path[32768]{};
     DWORD length=GetEnvironmentVariableW(L"VCToolsInstallDir",path,static_cast<DWORD>(std::size(path)));
     if(length==0 || length>=std::size(path))
-        return "Compiler not found. Start CodePath from Developer PowerShell for VS 2022.";
+        return "C/C++ compiler not found. Install Visual Studio C++ build tools, then retry.";
     auto compiler=std::filesystem::path(path)/L"bin/Hostx64/x64/cl.exe";
     std::error_code error;
     if(!std::filesystem::is_regular_file(compiler,error)) return "The Visual Studio x64 compiler was not found.";
@@ -805,6 +889,8 @@ const char* LessonNote(int id) {
     };
     return notes[id];
 }
+
+#include "premium_labs.inc"
 
 int SelfTest() {
     auto lessons=Curriculum();
@@ -904,15 +990,39 @@ int main(int argc, char** argv) {
     }
 #endif
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
-    InitWindow(1240,820,"CodePath Studio | C and C++");
+    InitWindow(1100,700,"CodePath Studio | C and C++");
+#ifdef _WIN32
+    // Keep the 1100x700 layout readable on Windows displays with enlarged text scaling.
+    Vector2 dpi=GetWindowScaleDPI();
+    int monitor=GetCurrentMonitor();
+    float windowScale=std::min({std::max(1.0f,dpi.x),std::max(1.0f,dpi.y),
+                                (GetMonitorWidth(monitor)-100)/1100.0f,
+                                (GetMonitorHeight(monitor)-100)/700.0f});
+    if(windowScale>1.01f) {
+        int startWidth=static_cast<int>(1100*windowScale), startHeight=static_cast<int>(700*windowScale);
+        SetWindowSize(startWidth,startHeight);
+        Vector2 monitorPosition=GetMonitorPosition(monitor);
+        SetWindowPosition(static_cast<int>(monitorPosition.x+(GetMonitorWidth(monitor)-startWidth)/2),
+                          static_cast<int>(monitorPosition.y+(GetMonitorHeight(monitor)-startHeight)/2));
+    }
+    SetWindowMinSize(static_cast<int>(1000*windowScale),static_cast<int>(700*windowScale));
+#else
     SetWindowMinSize(1000,700);
+#endif
     SetTargetFPS(60);
     ui=mono=heading=GetFontDefault();
-#ifdef _WIN32
-    if (FileExists("C:/Windows/Fonts/segoeui.ttf")) ui=LoadFontEx("C:/Windows/Fonts/segoeui.ttf",64,nullptr,0);
-    if (FileExists("C:/Windows/Fonts/seguisb.ttf")) heading=LoadFontEx("C:/Windows/Fonts/seguisb.ttf",72,nullptr,0);
-    if (FileExists("C:/Windows/Fonts/consola.ttf")) mono=LoadFontEx("C:/Windows/Fonts/consola.ttf",56,nullptr,0);
-#endif
+    auto fontPath=[&](const char* name) {
+        auto path=std::filesystem::path(GetApplicationDirectory())/"assets"/"fonts"/name;
+        if(!std::filesystem::exists(path)) path=std::filesystem::path("assets")/"fonts"/name;
+        return path.string();
+    };
+    auto uiFont=fontPath("Manrope-Regular.ttf"), headingFont=fontPath("Manrope-Bold.ttf");
+    auto codeFont=fontPath("JetBrainsMono-Regular.ttf");
+    if(FileExists(uiFont.c_str())) {
+        ui=LoadFontEx(uiFont.c_str(),64,nullptr,0);
+    }
+    if(FileExists(headingFont.c_str())) heading=LoadFontEx(headingFont.c_str(),84,nullptr,0);
+    if(FileExists(codeFont.c_str())) mono=LoadFontEx(codeFont.c_str(),64,nullptr,0);
     SetTextureFilter(ui.texture,TEXTURE_FILTER_BILINEAR);
     SetTextureFilter(mono.texture,TEXTURE_FILTER_BILINEAR);
     SetTextureFilter(heading.texture,TEXTURE_FILTER_BILINEAR);
@@ -952,7 +1062,9 @@ int main(int argc, char** argv) {
     int arrayInput=0;
     const std::array<int,3> arrayInputs[]={{2,4,8},{-3,7,2},{9,0,-9}};
     auto sortTrace=SortTrace(sortInputs[sortInput]);
+    bool pointerTrace=false;
     auto labCount=[&]{
+        if(lab==0) return static_cast<int>(std::size(PointerLab::operations));
         Scene scene=FindScene(lab);
         if(scene.count) return scene.count;
         return static_cast<int>(lab==5 ? sortTrace.size() : visualLabs[lab].steps.size());
@@ -1043,10 +1155,10 @@ int main(int argc, char** argv) {
         reward=std::max(0.0f,reward-dt);
         if(page==Visualize && playing) {
             timer+=dt*(speed==0 ? 0.5f : speed==1 ? 1.0f : 2.0f);
-                if(timer>=(lab==5 ? 1.25f : 3.5f)) {
+            if(timer>=2.2f) {
                 timer=0;
                 if(step+1<labCount()) ++step;
-                else playing=false;
+                else { playing=false; labMotion=1; }
             }
         }
         if(observedLab!=lab || observedStep!=step) {
@@ -1056,11 +1168,8 @@ int main(int argc, char** argv) {
             observedStep=step;
         }
         if(!motion) labMotion=1;
-        else if(page==Visualize && !phasePaused) {
-            float rate=playing ? (speed==0 ? 0.5f : speed==2 ? 2.0f : 1.0f) : 1.0f;
-            labMotion=std::min(1.0f,labMotion+dt*rate*(FindScene(lab).count ? 1.1f : 5));
-        }
-        float eased=labMotion*labMotion*(3-2*labMotion);
+        else if(page==Visualize && playing) labMotion=std::clamp(timer/2.2f,0.0f,1.0f);
+        else if(page==Visualize && !phasePaused) labMotion=std::min(1.0f,labMotion+dt/2.2f);
         if(page!=Assess || quiz.questions.empty() || observedIndex>static_cast<int>(quiz.index)) quizProgress=0;
         observedIndex=static_cast<int>(quiz.index);
         if(page==Assess && !quiz.questions.empty()) {
@@ -1095,17 +1204,30 @@ int main(int argc, char** argv) {
             EndDrawing();
             continue;
         }
-        DrawRectangleGradientH(210,0,static_cast<int>(w)-210,175,panel,bg);
-        DrawRectangleRec({0,0,208,h},rail);
-        Card({20,27,42,42},led);
-        Text(">_",27,35,22,bg,true);
+        DrawRectangleGradientV(208,0,static_cast<int>(w)-208,static_cast<int>(h),Color{13,42,45,255},bg);
+        DrawRectangleGradientV(0,0,208,static_cast<int>(h),Color{13,47,50,255},Color{10,30,33,255});
+        DrawLineEx({208,0},{208,h},1,seam);
+        for(int i=0;i<8;++i) {
+            float yy=108+i*i*77.0f;
+            DrawLineEx({208,yy},{w,yy-h*0.23f},1,Fade(seam,0.11f));
+        }
+        Card({20,27,42,42},rail);
+        DrawRectangleRoundedLinesEx({20,27,42,42},0.27f,8,2,led);
+        Text(">_",27,35,22,led,true);
         Text("CodePath",73,26,24);
         Text("S T U D I O",74,53,12,led);
-        Text("WORKSPACE",22,109,13,muted);
+        const Page navOrder[]={Home,Learn,Visualize,Notebook,Assess,Progress};
         for(int i=0;i<6;++i) {
-            if(Button({20,136+i*50.0f,167,41},nav[i],page==i)) {
-                if(page!=i) playing=false;
-                page=static_cast<Page>(i);
+            Page destination=navOrder[i];
+            Rectangle item{20,115+i*50.0f,167,41};
+            bool hovered=CheckCollisionPointRec(GetMousePosition(),item);
+            Card(item,page==destination ? litSurface : hovered ? hoverSurface : rail);
+            if(page==destination) DrawRectangleRoundedLinesEx(item,0.25f,8,1.5f,led);
+            NavIcon(destination,{item.x+21,item.y+20},page==destination ? led : muted);
+            Text(nav[destination],item.x+43,item.y+11,16,page==destination ? ink : muted);
+            if(hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                if(page!=destination) playing=false;
+                page=destination;
             }
         }
         if(Button({20,h-124,167,32},motion ? "Motion on" : "Motion off")) motion=!motion;
@@ -1124,15 +1246,15 @@ int main(int argc, char** argv) {
         Text("LOCAL PROFILE",21,h-31,12,muted);
         if(Button({20,h-167,167,34},IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) ? "Exit fullscreen" : "Fullscreen  F11"))
             fullscreenRequested=true;
-        Text("CODEPATH STUDIO   /   NATIVE LEARNING WORKSPACE",x,24,13,led);
-        Text(nav[page],x,44,42);
+        Text("CODEPATH STUDIO   /   NATIVE LEARNING WORKSPACE",x,19,14,led);
+        Text(nav[page],x,43,39);
         if(!saved) Text("Progress could not be saved",x,h-25,15,errorColor);
 
         if(page==Home) {
             float heroBottom=h*0.63f;
             InstrumentHeading("MEMORY WORKBENCH",x,116,width);
             float sideWidth=198;
-            DrawMemoryBoard(memoryBoard,{x,154,width-sideWidth-22,heroBottom-205},motion);
+            PremiumLabs::DrawHomeMemory(memoryBoard,{x,154,width-sideWidth-22,heroBottom-205},motion);
             memoryBoard.Update(dt,motion);
             float tools=x+width-sideWidth;
             Text("EXECUTE",tools,161,15,led);
@@ -1197,6 +1319,7 @@ int main(int argc, char** argv) {
 
         } else if(page==Learn) {
             float menu=std::clamp(width*0.25f,218.0f,292.0f),bx=x+menu+14,bw=width-menu-14;
+            Card({x,144,menu,h-200},rail);
             for(int i=0;i<4;++i)
                 if(Button({x+i*53.0f,107,50,32},paths[i],path==i)) { path=i; offset=0; }
             auto list=filter(path);
@@ -1288,21 +1411,23 @@ int main(int argc, char** argv) {
             }
 #ifdef _WIN32
             int related=current==2 ? 4 : current==8 ? 2 : current==7 ? 1 : current==15 ? 5 : -1;
-            if(related>=0 && Button({bx+215,actions+43,144,32},"Coding challenge"))
+            if(related>=0 && Button({bx+15,actions+43,144,32},"Coding challenge"))
                 selectChallenge(related);
 #endif
             auto position=std::find(list.begin(),list.end(),current);
-            if(position!=list.begin() && Button({bx+15,actions+43,96,32},"Previous")) {
+            if(position!=list.begin() && Button({bx+bw-199,actions+43,96,32},"Previous")) {
                 pick(*(position-1));
                 offset=std::min(offset,static_cast<int>(position-list.begin())-1);
             }
-            if(position+1!=list.end() && Button({bx+119,actions+43,86,32},"Next")) {
+            if(position+1!=list.end() && Button({bx+bw-95,actions+43,86,32},"Next")) {
                 pick(*(position+1));
                 offset=std::max(offset,static_cast<int>(position-list.begin())+2-visible);
             }
         } else if(page==Assess) {
             if(quiz.questions.empty()) {
-                DrawRectangleGradientH(static_cast<int>(x),109,static_cast<int>(width),295,rail,bg);
+                Card({x,109,width,295},rail);
+                DrawRectangleGradientH(static_cast<int>(x+2),111,static_cast<int>(width-4),180,
+                                       Fade(seam,0.46f),Fade(rail,0));
                 InstrumentHeading("PRACTICE MODES",x+20,130,width-40);
                 Text("Put it to the test.",x+20,164,38);
                 Wrap("Check the current lesson, try eight mixed questions, or focus on one track.",x+20,214,width-40,19);
@@ -1315,7 +1440,30 @@ int main(int argc, char** argv) {
                         startQuiz(std::move(pool));
                     }
                 }
+                float lower=424, gap=13, tile=(width-2*gap)/3;
+                const char* routeTitle[]={"1  Study a lesson","2  Inspect a model","3  Write and run code"};
+                const char* routeDetail[]={"Review the current topic and its worked example.",
+                                           "Watch a memory or data structure change step by step.",
+                                           "Try an example or one of six coding challenges."};
+                for(int i=0;i<3;++i) {
+                    float left=x+i*(tile+gap);
+                    Card({left,lower,tile,std::min(211.0f,h-lower-35)},rail);
+                    Text(routeTitle[i],left+15,lower+17,20,i==1 ? led : ink);
+                    Wrap(routeDetail[i],left+15,lower+51,tile-30,16,muted);
+                    if(Button({left+15,lower+138,tile-30,38},i==0 ? "Open current lesson" :
+                              i==1 ? "Open visual lab" : "Open notebook")) {
+                        if(i==0) { path=0; page=Learn; }
+                        else if(i==1) {
+                            const std::string topic=lessons[current].title;
+                            lab=current==3 ? 4 : topic=="Structures and allocation" ? 2 :
+                                topic=="Recursion" ? 3 :
+                                topic=="Arrays and strings" || topic=="Loops and functions" ? 1 : 0;
+                            step=0; playing=false; timer=0; page=Visualize;
+                        } else page=Notebook;
+                    }
+                }
             } else if(quiz.index>=quiz.questions.size()) {
+                Card({x,109,width,239},rail);
                 InstrumentHeading("ASSESSMENT COMPLETE",x+20,132,width-40);
                 MasteryRing({x+width-100,228},static_cast<float>(quiz.correct)/quiz.questions.size());
                 Text(TextFormat("%d / %d correct",quiz.correct,static_cast<int>(quiz.questions.size())),x+20,163,39);
@@ -1327,7 +1475,9 @@ int main(int argc, char** argv) {
             } else {
                 int id=quiz.questions[quiz.index];
                 const Lesson& item=lessons[id];
-                DrawRectangleGradientH(static_cast<int>(x),109,static_cast<int>(width),76,rail,bg);
+                Card({x,109,width,h-173},rail);
+                DrawRectangleGradientH(static_cast<int>(x+2),111,static_cast<int>(width-4),76,
+                                       Fade(seam,0.42f),Fade(rail,0));
                 Text(TextFormat("%s   /   QUESTION %d OF %d",item.title,static_cast<int>(quiz.index)+1,
                      static_cast<int>(quiz.questions.size())),x+20,130,15,led);
                 float segment=(width-48)/quiz.questions.size();
@@ -1393,98 +1543,7 @@ int main(int argc, char** argv) {
 
 
         } else if(page==Visualize) {
-            const float gap=8;
-            float tabWidth=(width-2*gap)/3;
-            for(int i=0;i<6;++i) {
-                if(Button({x+(i%3)*(tabWidth+gap),112+(i/3)*49.0f,tabWidth,42},
-                          visualLabs[i].name,lab==i)) {
-                    lab=i; step=0; timer=0; playing=false;
-                }
-            }
-            float toolsY=h-106;
-            float inspector=std::clamp(width*0.30f,252.0f,338.0f);
-            Rectangle stage{x,218,width-inspector-14,toolsY-233};
-            Rectangle guide{stage.x+stage.width+14,stage.y,inspector,stage.height};
-            DrawRectangleGradientV(static_cast<int>(stage.x),static_cast<int>(stage.y),
-                                   static_cast<int>(stage.width),static_cast<int>(stage.height),rail,bg);
-            DrawRectangleLinesEx(stage,1,seam);
-            Clip(stage.x+2,stage.y+2,stage.width-4,stage.height-4);
-            for(float gx=stage.x+23;gx<stage.x+stage.width-12;gx+=22)
-                for(float gy=stage.y+67;gy<stage.y+stage.height-10;gy+=22)
-                    DrawCircleV({gx,gy},1,seam);
-            EndScissorMode();
-            Text("LIVE MODEL",stage.x+18,stage.y+17,14,led);
-            Text(visualLabs[lab].name,stage.x+18,stage.y+38,26);
-            Scene scene=FindScene(lab);
-            if(lab==5) DrawSort(sortTrace,step,eased,stage);
-            else if(scene.count) {
-                Clip(stage.x+4,stage.y+67,stage.width-8,stage.height-145);
-                DrawScene(lab,step,labMotion,{stage.x+5,stage.y+70,stage.width-10,stage.height-150});
-                EndScissorMode();
-            } else Model(lab,step,{stage.x,stage.y,stage.width,stage.height-55},eased,arrayInputs[arrayInput]);
-            if(lab==5 || lab==1) {
-                if(Button({stage.x+17,stage.y+stage.height-46,155,35},"Change input")) {
-                    if(lab==5) {
-                        sortInput=(sortInput+1)%static_cast<int>(std::size(sortInputs));
-                        sortTrace=SortTrace(sortInputs[sortInput]);
-                    } else arrayInput=(arrayInput+1)%static_cast<int>(std::size(arrayInputs));
-                    step=0; playing=false; timer=0;
-                }
-            } else {
-                Rectangle caption{stage.x+14,stage.y+stage.height-76,stage.width-28,64};
-                Card(caption,rail);
-                Wrap(scene.count ? scene.frames[step].caption : LabCaption(lab,step),
-                     caption.x+12,caption.y+8,caption.width-24,17,ink);
-            }
-
-            InstrumentHeading("EXECUTION TRACE",guide.x+16,guide.y+17,guide.width-32);
-            float guideY=Wrap(visualLabs[lab].description,guide.x+16,guide.y+52,guide.width-32,18)+12;
-            int count=labCount();
-            float stepHeight=std::min(43.0f,(guide.y+guide.height-guideY-10)/count);
-            for(int i=0;i<count;++i) {
-                Rectangle row{guide.x+10,guideY+i*stepHeight,guide.width-20,stepHeight-4};
-                bool hover=CheckCollisionPointRec(GetMousePosition(),row);
-                if(i==step || hover) Card(row,i==step ? litSurface : rail);
-                Text(TextFormat("%02d",i+1),row.x+7,row.y+(row.height-14)/2,14,i==step ? led : muted,true);
-                Clip(row.x+34,row.y,row.width-36,row.height);
-                float size=16;
-                std::string code=scene.count ? scene.frames[i].operation :
-                                 lab==5 ? SortStep(sortTrace,i) : visualLabs[lab].steps[i];
-                if(lab==1 && i==0) code=TextFormat("int a[] = {%d, %d, %d};",arrayInputs[arrayInput][0],
-                                                   arrayInputs[arrayInput][1],arrayInputs[arrayInput][2]);
-                while(size>11 && MeasureTextEx(mono,code.c_str(),size,0.5f).x>row.width-40) --size;
-                Text(code.c_str(),row.x+34,row.y+(row.height-size)/2,size,i==step ? ink : muted,true);
-                EndScissorMode();
-                if(hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) { step=i; playing=false; timer=0; }
-            }
-            Card({x,toolsY,width,87});
-            Rectangle timeline{x+15,toolsY+4,width-30,21};
-            Bar(timeline.x,timeline.y+8,timeline.width,(step+1.0f)/count);
-            for(int i=0;i<count;++i) {
-                float px=timeline.x+timeline.width*(i+0.5f)/count;
-                if(i==step) DrawCircleGradient(static_cast<int>(px),static_cast<int>(timeline.y+10),10,Fade(led,0.65f),Fade(led,0));
-                DrawCircleV({px,timeline.y+10},i==step ? 4.0f : 2.0f,i<=step ? led : muted);
-            }
-            if(CheckCollisionPointRec(GetMousePosition(),timeline) && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-                float fraction=(GetMousePosition().x-timeline.x)/timeline.width;
-                step=std::clamp(static_cast<int>(fraction*count),0,count-1);
-                playing=false; timer=0;
-            }
-            float control=toolsY+27;
-            if(Button({x+15,control,96,45},"Restart")) { step=0; playing=false; timer=0; labMotion=0; phasePaused=false; }
-            if(Button({x+120,control,83,45},"Back")) { step=std::max(0,step-1); playing=false; timer=0; }
-            if(Button({x+212,control,86,45},"Next")) { step=std::min(count-1,step+1); playing=false; timer=0; }
-            if(Button({x+307,control,100,45},playing ? "Pause" : "Play",true)) {
-                if(!playing && step+1==count) step=0;
-                if(!playing && !phasePaused) timer=0;
-                playing=!playing;
-                phasePaused=!playing;
-            }
-            const char* rates[]={"0.5x","1x","2x"};
-            if(Button({x+416,control,82,45},rates[speed])) speed=(speed+1)%3;
-            if(Button({x+507,control,79,45},"End")) { step=count-1; playing=false; timer=0; phasePaused=false; }
-            Text(TextFormat("STEP %02d / %02d",step+1,count),x+width-148,control+12,18,muted);
-
+#include "visual_labs_ui.inc"
         } else if(page==Notebook) {
             Text("C / C++ SYNTAX NOTEBOOK",x,108,14,led);
 #ifdef _WIN32
@@ -1534,7 +1593,7 @@ int main(int argc, char** argv) {
             editor.Draw({x,workspaceY,editorWidth,workspaceHeight});
             Rectangle outputBox{x+editorWidth+15,workspaceY,column,workspaceHeight};
             Card(outputBox,rail);
-            std::istringstream stream(console.empty() ? "Compiler output appears here.\nLaunch from x64\nDeveloper PowerShell." : console);
+            std::istringstream stream(console.empty() ? "Compiler output appears here.\nRun an example or choose\na coding challenge." : console);
             std::vector<std::string> lines;
             std::string line;
             float glyph=MeasureTextEx(mono,"M",17,0.5f).x+0.5f;
@@ -1575,7 +1634,8 @@ int main(int argc, char** argv) {
 #endif
         } else if(page==Progress) {
             float half=(width-14)/2,right=x+half+14;
-            DrawRectangleGradientH(static_cast<int>(x),112,static_cast<int>(width),155,rail,bg);
+            Card({x,112,half,155},rail);
+            Card({right,112,half,155},rail);
             MasteryRing({x+half-83,187},displayed);
             Text("MASTERY SCORE",x+19,128,15,led);
             Text(TextFormat("%d XP  /  Level %d",xp,level),x+19,154,32);
@@ -1585,6 +1645,8 @@ int main(int argc, char** argv) {
             Text(TextFormat("%d correct out of %d attempts",correct,attempts),right+19,201,18,muted);
             float start=281, area=h-start-22;
             float row=(area-57)/3;
+            Card({x,start,half,area},rail);
+            Card({right,start,half,area},rail);
             InstrumentHeading("SKILL MAP",x+18,start+17,half-36);
             InstrumentHeading("ACHIEVEMENTS",right+18,start+17,half-36);
             for(int p=1;p<=3;++p) {
@@ -1604,7 +1666,8 @@ int main(int argc, char** argv) {
                     if(i>0) DrawLineEx({node.x-track,y+row-24-((i-1)%2)*9},node,1,seam);
                     if(hover || scores[id].correct)
                         DrawCircleGradient(static_cast<int>(node.x),static_cast<int>(node.y),11,Fade(led,0.6f),Fade(led,0));
-                    DrawPoly(node,6,hover ? 7.0f : 5.0f,30,scores[id].correct ? led : muted);
+                    DrawCircleV(node,hover ? 5.0f : 4.0f,scores[id].correct ? led : muted);
+                    DrawCircleLinesV(node,hover ? 8.0f : 6.0f,Fade(scores[id].correct ? led : muted,0.72f));
                     if(hover) Text(lessons[id].title,x+26,y+row-57,15,ink);
                     if(hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                         path=p; offset=static_cast<int>(i); pick(id); page=Learn;
