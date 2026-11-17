@@ -27,6 +27,21 @@ four input presets and shows comparisons separately from swaps. The sidebar
 motion control also applies to lab transitions. On Windows, open the sum
 exercise directly from the Overview using **Coding challenge**.
 
+## Guided lessons and challenges
+
+The startup intro lasts four seconds and can be skipped with a click or key.
+The sidebar **Intro on/off** setting persists for the next launch.
+
+In **Visual labs**, choose Pointer alias, Heap lifetime, or Recursive calls
+to play an animated explanation. Use the step list or timeline to seek,
+or use **End** to skip to the final state. **Motion off** shows settled states.
+In **Curriculum**, use **Deep dive** on Pointers, Arrays and strings,
+Structures and allocation, Recursion, or Classes and invariants.
+
+On Windows, **Code notebook → Challenges** opens six exercises. Each
+exercise has starter code, an example, and four compiler-backed tests.
+Use **Run four tests** to evaluate a solution.
+
 ## Build on macOS
 
 Install raylib once:

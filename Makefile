@@ -13,7 +13,7 @@ all: check-raylib $(APP)
 check-raylib:
 	@pkg-config --exists raylib || (echo "raylib was not found. On macOS run: brew install raylib" && exit 1)
 
-$(APP): $(APP_SOURCE)
+$(APP): $(APP_SOURCE) $(wildcard src/*.inc)
 	$(CXX) $(CXXFLAGS) $(RAYLIB_CFLAGS) $(APP_SOURCE) -o $@ $(RAYLIB_LIBS)
 
 run: all

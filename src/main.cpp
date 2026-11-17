@@ -267,6 +267,9 @@ const Lab visualLabs[] = {
     {"Bubble sort", "Adjacent comparisons move the largest element right during the first pass.",
      {"Start with [5, 2, 4]", "Compare 5 and 2, then swap", "Compare 5 and 4, then swap", "Compare 2 and 4, no swap"}}
 };
+void Arrow(float x,float y,float end,float endY,float scale);
+#include "scenes.inc"
+
 struct SortFrame {
     std::array<int,3> values;
     int left=-1;
@@ -701,7 +704,9 @@ ProcessResult RunLocal(const std::filesystem::path& program, std::wstring comman
     return {!stopped && code==0,result};
 }
 
-std::string CompileAndRun(const std::string& code,bool cpp,bool challenge=false) {
+#include "challenges.inc"
+
+std::string CompileAndRun(const std::string& code,bool cpp,int challenge=-1) {
     wchar_t path[32768]{};
     DWORD length=GetEnvironmentVariableW(L"VCToolsInstallDir",path,static_cast<DWORD>(std::size(path)));
     if(length==0 || length>=std::size(path))
@@ -720,24 +725,24 @@ std::string CompileAndRun(const std::string& code,bool cpp,bool challenge=false)
         auto compile=RunLocal(compiler,cpp ? L"cl.exe /nologo /W4 /EHsc /std:c++17 /Fesample.exe main.cpp" :
                                            L"cl.exe /nologo /W4 /std:c17 /Fesample.exe main.c",folder,15000);
         report=(compile.ok ? "Build succeeded\n" : "Build failed\n")+compile.output;
-        if(compile.ok && challenge) {
-            const int inputs[]={0,1,5,20};
+        if(compile.ok && challenge>=0) {
+            const auto& exercise=challenges[challenge];
             int passed=0;
-            report+="\n--- Sum challenge ---\n";
+            report+=std::string("\n--- ")+exercise.title+" ---\n";
             auto input=folder/L"input.txt";
-            for(int n:inputs) {
+            for(size_t n=0;n<exercise.inputs.size();++n) {
                 std::ofstream fixture(input);
-                fixture << n << '\n';
+                fixture << exercise.inputs[n] << '\n';
                 fixture.close();
                 if(!fixture) { report+="Could not write test input.\n"; break; }
                 auto run=RunLocal(folder/L"sample.exe",L"sample.exe",folder,1500,input.c_str());
-                int expected=n*(n+1)/2;
+                int expected=exercise.expected[n];
                 std::istringstream output(run.output);
                 int actual=0;
                 std::string extra;
                 bool pass=run.ok && (output >> actual) && actual==expected && !(output >> extra);
                 passed+=pass;
-                report+="n = "+std::to_string(n)+"  expected "+std::to_string(expected)+"  ";
+                report+=std::string("Input: ")+exercise.inputs[n]+"  expected "+std::to_string(expected)+"  ";
                 report+=pass ? "PASS\n" : "FAIL\n";
                 if(!pass && !run.output.empty()) report+=run.output.substr(0,150)+"\n";
             }
@@ -756,6 +761,7 @@ std::string CompileAndRun(const std::string& code,bool cpp,bool challenge=false)
 #endif
 
 enum Page { Home, Learn, Assess, Visualize, Notebook, Progress };
+#include "lesson_details.inc"
 const char* LessonNote(int id) {
     static const char* notes[]={
         "Trace total after each iteration. For an array of length n, stop before index n.",
@@ -865,7 +871,12 @@ int main(int argc, char** argv) {
         std::string c=CompileAndRun("#include <stdio.h>\nint main(void) { puts(\"CodePath C output\"); }",false);
         std::string cpp=CompileAndRun("#include <iostream>\nint main() { std::cout << \"CodePath CPP output\"; }",true);
         std::string challenge=CompileAndRun("#include <stdio.h>\nint main(void) { int n; "
-            "if (scanf(\"%d\", &n) == 1) printf(\"%d\\n\", n*(n+1)/2); }",false,true);
+            "if (scanf(\"%d\", &n) == 1) printf(\"%d\\n\", n*(n+1)/2); }",false,0);
+        for(int i=1;i<static_cast<int>(std::size(challenges));++i) {
+            auto result=CompileAndRun(challenges[i].reference,challenges[i].cpp,i);
+            std::puts(result.c_str());
+            if(result.find("4/4 cases passed")==std::string::npos) return 1;
+        }
         std::string invalid=CompileAndRun("this is not C++;",true);
         std::string timeout=CompileAndRun("int main(void) { volatile int n = 0; while (n == 0) {} }",false);
         std::puts((c+"\n"+cpp+"\n"+challenge+"\n"+invalid+"\n"+timeout).c_str());
@@ -905,10 +916,15 @@ int main(int argc, char** argv) {
 #ifdef _MSC_VER
     std::free(windowsProfile);
 #endif
+    auto introSetting=save.parent_path()/"skip-intro";
+    std::error_code introError;
+    bool introEnabled=!std::filesystem::exists(introSetting,introError);
+    float introTime=introEnabled ? 0.0f : 4.0f;
     int current=0, path=0, offset=0, lab=0, step=0, speed=1;
     ReadProgress(save,scores,current);
     bool saved=true, playing=false, motion=true;
-    bool fullscreenRequested=false;
+    bool fullscreenRequested=false, lessonDetail=false, phasePaused=false;
+    int lessonScroll=0;
     float timer=0, reward=0, displayed=0;
     float labMotion=1, quizProgress=0, reveal=1;
     Page previousPage=Home;
@@ -918,13 +934,19 @@ int main(int argc, char** argv) {
     int arrayInput=0;
     const std::array<int,3> arrayInputs[]={{2,4,8},{-3,7,2},{9,0,-9}};
     auto sortTrace=SortTrace(sortInputs[sortInput]);
-    auto labCount=[&]{return static_cast<int>(lab==5 ? sortTrace.size() : visualLabs[lab].steps.size());};
+    auto labCount=[&]{
+        Scene scene=FindScene(lab);
+        if(scene.count) return scene.count;
+        return static_cast<int>(lab==5 ? sortTrace.size() : visualLabs[lab].steps.size());
+    };
     Page page=Home;
     QuizState quiz;
     Editor editor;
     editor.code=lessons[current].code;
 #ifdef _WIN32
-    bool cppMode=false, sumChallenge=false;
+    bool cppMode=false;
+    int challenge=-1;
+    bool challengePicker=false;
     std::future<std::string> job;
     std::string console;
     int outputScroll=0;
@@ -936,11 +958,13 @@ int main(int argc, char** argv) {
         editor.scroll=0;
         editor.horizontal=0;
     };
-    auto openChallenge=[&] {
-        loadCode("#include <stdio.h>\n\nint main(void) {\n    int n;\n    if (scanf(\"%d\", &n) != 1) return 1;\n"
-                 "    int sum = 0;\n    // TODO: add the integers from 1 through n.\n    printf(\"%d\\n\", sum);\n}");
-        sumChallenge=true;
-        cppMode=false;
+    auto selectChallenge=[&](int id) {
+        challenge=id;
+        cppMode=challenges[id].cpp;
+        loadCode(challenges[id].starter);
+        if(!job.valid()) console.clear();
+        outputScroll=0;
+        challengePicker=false;
         page=Notebook;
     };
 #endif
@@ -948,7 +972,7 @@ int main(int argc, char** argv) {
     const char* paths[]={"ALL","C","C++","EXAM"};
     const char* nav[]={"Overview","Curriculum","Assessments","Visual labs","Code notebook","Progress"};
     auto saveNow=[&]{ saved=WriteProgress(save,scores,current); };
-    auto pick=[&](int id){ if(current!=id){ current=id; saveNow(); } };
+    auto pick=[&](int id){ if(current!=id){ current=id; lessonScroll=0; saveNow(); } };
     auto filter=[&](int p){
         std::vector<int> list;
         const int sequence[]={4,0,5,6,7,8,2,9,10,11,12,13,14,15,16,17,18,19,20,21,3,1};
@@ -999,10 +1023,15 @@ int main(int argc, char** argv) {
         }
         if(observedLab!=lab || observedStep!=step) {
             labMotion=0;
+            phasePaused=false;
             observedLab=lab;
             observedStep=step;
         }
-        labMotion=motion ? std::min(1.0f,labMotion+dt*5) : 1;
+        if(!motion) labMotion=1;
+        else if(page==Visualize && !phasePaused) {
+            float rate=playing ? (speed==0 ? 0.5f : speed==2 ? 2.0f : 1.0f) : 1.0f;
+            labMotion=std::min(1.0f,labMotion+dt*rate*(FindScene(lab).count ? 1.1f : 5));
+        }
         float eased=labMotion*labMotion*(3-2*labMotion);
         if(page!=Assess || quiz.questions.empty() || observedIndex>static_cast<int>(quiz.index)) quizProgress=0;
         observedIndex=static_cast<int>(quiz.index);
@@ -1014,6 +1043,30 @@ int main(int argc, char** argv) {
         BeginDrawing();
         ClearBackground(bg);
         BeginMode2D({{static_cast<float>(uiInset),0},{0,0},0,uiScale});
+        if(introTime<4) {
+            bool skip=IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || GetKeyPressed()!=0 || !motion;
+            introTime=skip ? 4 : std::min(4.0f,introTime+dt);
+            float open=Ease(introTime/1.1f), fade=Ease((4-introTime)/0.65f);
+            DrawRectangleGradientH(0,0,static_cast<int>(w),static_cast<int>(h),rail,bg);
+            for(int i=0;i<14;++i) {
+                float radius=45+i*19.0f+introTime*7;
+                DrawRing({w/2,h/2-36},radius,radius+1,31+i*17+introTime*24,224+i*17+introTime*24,
+                         64,Fade(i%2 ? mint : violet,(0.16f-i*0.007f)*fade));
+            }
+            const char* marks[]={"{ }","< >","&","*","[ ]"};
+            for(int i=0;i<5;++i) {
+                float angle=i*1.2566f+introTime*0.22f;
+                Text(marks[i],w/2+std::cos(angle)*(108+open*103),h/2-37+std::sin(angle)*139,
+                     27,Fade(i%2 ? mint : violet,open*fade*0.65f),true);
+            }
+            Card({w/2-190,h/2-84+(1-open)*26,380,103},Fade(rail,open*fade));
+            Text("CodePath Studio",w/2-157,h/2-65+(1-open)*26,46,Fade(ink,open*fade));
+            Text("C AND C++ LEARNING WORKSPACE",w/2-137,h/2+30,16,Fade(mint,open*fade));
+            Text("Click or press a key to skip",w/2-98,h-59,17,muted);
+            EndMode2D();
+            EndDrawing();
+            continue;
+        }
         DrawRectangleGradientH(210,0,static_cast<int>(w)-210,175,Color{24,35,57,255},bg);
         DrawRectangleRec({0,0,208,h},rail);
         Card({20,27,42,42},mint);
@@ -1028,6 +1081,16 @@ int main(int argc, char** argv) {
             }
         }
         if(Button({20,h-124,167,32},motion ? "Motion on" : "Motion off")) motion=!motion;
+        if(Button({20,h-207,167,34},introEnabled ? "Intro on" : "Intro off")) {
+            if(introEnabled) {
+                std::filesystem::create_directories(save.parent_path(),introError);
+                std::ofstream marker(introSetting);
+                if(marker) introEnabled=false;
+            } else {
+                std::filesystem::remove(introSetting,introError);
+                if(!introError) introEnabled=true;
+            }
+        }
         Bar(21,h-72,166,displayed);
         Text(TextFormat("LEVEL %d  /  %d XP",level,xp),21,h-55,15,mint);
         Text("LOCAL PROFILE",21,h-31,12,muted);
@@ -1047,6 +1110,13 @@ int main(int argc, char** argv) {
             float glow=motion ? 0.5f+0.5f*static_cast<float>(std::sin(GetTime()*1.6)) : 0.5f;
             for(int i=0;i<4;++i)
                 DrawCircleLines(static_cast<int>(x+width-112),static_cast<int>(110+hero/2),27+i*20.0f,Fade(mint,0.15f+glow*0.16f));
+            float artX=x+width-185, artY=110+hero/2-47;
+            Card({artX+9,artY+9,145,94},Fade(bg,0.55f));
+            Card({artX,artY,145,94},Color{19,31,51,255});
+            Text("MEMORY TRACE",artX+13,artY+11,12,violet);
+            Text("&score",artX+13,artY+36,22,mint,true);
+            DrawLineEx({artX+13,artY+72},{artX+129,artY+72},2,Fade(muted,0.4f));
+            DrawCircleV({artX+13+116*glow,artY+72},4,mint);
             Text("C / C++ LEARNING PATH",x+23,134,16,mint);
             Text("Make the invisible visible.",x+22,164,42);
             Text("Explore code, trace memory, and check your understanding.",x+23,220,20,muted);
@@ -1090,7 +1160,9 @@ int main(int argc, char** argv) {
             float practiceButton=(half-51)/2;
             if(Button({x+half+33,activityY+activityHeight-56,practiceButton,42},"Mixed assessment")) mixed();
 #ifdef _WIN32
-            if(Button({x+half+42+practiceButton,activityY+activityHeight-56,practiceButton,42},"Coding challenge")) openChallenge();
+            if(Button({x+half+42+practiceButton,activityY+activityHeight-56,practiceButton,42},"Coding challenges")) {
+                challengePicker=true; page=Notebook;
+            }
 #endif
         } else if(page==Learn) {
             float menu=std::clamp(width*0.25f,218.0f,292.0f),bx=x+menu+14,bw=width-menu-14;
@@ -1116,8 +1188,27 @@ int main(int argc, char** argv) {
             Text(TextFormat("%s   /   LESSON %02d",item.path,current+1),bx+17,127,14,mint);
             float titleEnd=Wrap(item.title,bx+19,152,bw-38,30,ink);
             float by=Wrap(item.body,bx+19,titleEnd+12,bw-38,20)+18;
-            Text("WORKED EXAMPLE",bx+17,by,13,violet);
             float actions=h-127;
+            auto details=LessonDetails(current);
+            if(!details.empty() && Button({bx+bw-142,115,127,32},lessonDetail ? "Code example" : "Deep dive",lessonDetail)) {
+                lessonDetail=!lessonDetail; lessonScroll=0;
+            }
+            if(lessonDetail && !details.empty()) {
+                Rectangle area{bx+15,by,bw-30,actions-by-15};
+                Card(area,rail);
+                if(CheckCollisionPointRec(GetMousePosition(),area))
+                    lessonScroll-=static_cast<int>(GetMouseWheelMove()*38);
+                lessonScroll=std::max(0,lessonScroll);
+                Clip(area.x+5,area.y+5,area.width-10,area.height-10);
+                float dy=area.y+15-lessonScroll;
+                for(size_t i=0;i<details.size();i+=2) {
+                    Text(details[i],area.x+15,dy,21,mint);
+                    dy=Wrap(details[i+1],area.x+15,dy+29,area.width-30,19)+18;
+                }
+                EndScissorMode();
+                lessonScroll=std::min(lessonScroll,std::max(0,static_cast<int>(dy+lessonScroll-area.y-area.height)));
+            } else {
+            Text("WORKED EXAMPLE",bx+17,by,13,violet);
             float codeHeight=actions-by-40;
             bool hasPracticeNote=codeHeight>=298;
             if(hasPracticeNote) codeHeight-=74;
@@ -1128,12 +1219,14 @@ int main(int argc, char** argv) {
                 Wrap(LessonNote(current),
                      bx+19,noteY+22,bw-38,18);
             }
+            }
             if(Button({bx+15,actions,112,37},"Practice",true)) startQuiz({current});
             if(Button({bx+134,actions,127,37},"Edit example")) {
 #ifdef _WIN32
                 loadCode(item.code);
                 cppMode=std::string(item.path)!="C";
-                sumChallenge=false;
+                challenge=-1;
+                challengePicker=false;
 #else
                 editor.cursor=0;
                 editor.anchor=editor.code.size();
@@ -1154,6 +1247,11 @@ int main(int argc, char** argv) {
             if(linkedLab>=0 && Button({bx+268,actions,117,37},"Visual lab")) {
                 lab=linkedLab; step=0; playing=false; timer=0; page=Visualize;
             }
+#ifdef _WIN32
+            int related=current==2 ? 4 : current==8 ? 2 : current==7 ? 1 : current==15 ? 5 : -1;
+            if(related>=0 && Button({bx+215,actions+43,144,32},"Coding challenge"))
+                selectChallenge(related);
+#endif
             auto position=std::find(list.begin(),list.end(),current);
             if(position!=list.begin() && Button({bx+15,actions+43,96,32},"Previous")) {
                 pick(*(position-1));
@@ -1270,8 +1368,13 @@ int main(int argc, char** argv) {
             EndScissorMode();
             Text("LIVE MODEL",stage.x+18,stage.y+17,14,mint);
             Text(visualLabs[lab].name,stage.x+18,stage.y+38,26);
+            Scene scene=FindScene(lab);
             if(lab==5) DrawSort(sortTrace,step,eased,stage);
-            else Model(lab,step,{stage.x,stage.y,stage.width,stage.height-55},eased,arrayInputs[arrayInput]);
+            else if(scene.count) {
+                Clip(stage.x+4,stage.y+67,stage.width-8,stage.height-145);
+                DrawScene(lab,step,labMotion,{stage.x+5,stage.y+70,stage.width-10,stage.height-150});
+                EndScissorMode();
+            } else Model(lab,step,{stage.x,stage.y,stage.width,stage.height-55},eased,arrayInputs[arrayInput]);
             if(lab==5 || lab==1) {
                 if(Button({stage.x+17,stage.y+stage.height-46,155,35},"Change input")) {
                     if(lab==5) {
@@ -1283,7 +1386,8 @@ int main(int argc, char** argv) {
             } else {
                 Rectangle caption{stage.x+14,stage.y+stage.height-76,stage.width-28,64};
                 Card(caption,rail);
-                Wrap(LabCaption(lab,step),caption.x+12,caption.y+8,caption.width-24,17,ink);
+                Wrap(scene.count ? scene.frames[step].caption : LabCaption(lab,step),
+                     caption.x+12,caption.y+8,caption.width-24,17,ink);
             }
 
             Card(guide);
@@ -1298,7 +1402,8 @@ int main(int argc, char** argv) {
                 Text(TextFormat("%02d",i+1),row.x+7,row.y+(row.height-14)/2,14,i==step ? mint : muted,true);
                 Clip(row.x+34,row.y,row.width-36,row.height);
                 float size=16;
-                std::string code=lab==5 ? SortStep(sortTrace,i) : visualLabs[lab].steps[i];
+                std::string code=scene.count ? scene.frames[i].operation :
+                                 lab==5 ? SortStep(sortTrace,i) : visualLabs[lab].steps[i];
                 if(lab==1 && i==0) code=TextFormat("int a[] = {%d, %d, %d};",arrayInputs[arrayInput][0],
                                                    arrayInputs[arrayInput][1],arrayInputs[arrayInput][2]);
                 while(size>11 && MeasureTextEx(mono,code.c_str(),size,0.5f).x>row.width-40) --size;
@@ -1315,15 +1420,18 @@ int main(int argc, char** argv) {
                 playing=false; timer=0;
             }
             float control=toolsY+27;
-            if(Button({x+15,control,96,45},"Restart")) { step=0; playing=false; timer=0; }
+            if(Button({x+15,control,96,45},"Restart")) { step=0; playing=false; timer=0; labMotion=0; phasePaused=false; }
             if(Button({x+120,control,83,45},"Back")) { step=std::max(0,step-1); playing=false; timer=0; }
             if(Button({x+212,control,86,45},"Next")) { step=std::min(count-1,step+1); playing=false; timer=0; }
             if(Button({x+307,control,100,45},playing ? "Pause" : "Play",true)) {
                 if(!playing && step+1==count) step=0;
-                playing=!playing; timer=0;
+                if(!playing && !phasePaused) timer=0;
+                playing=!playing;
+                phasePaused=!playing;
             }
             const char* rates[]={"0.5x","1x","2x"};
             if(Button({x+416,control,82,45},rates[speed])) speed=(speed+1)%3;
+            if(Button({x+507,control,79,45},"End")) { step=count-1; playing=false; timer=0; phasePaused=false; }
             Text(TextFormat("STEP %02d / %02d",step+1,count),x+width-148,control+12,18,muted);
 
         } else if(page==Notebook) {
@@ -1333,18 +1441,32 @@ int main(int argc, char** argv) {
             if(Button({x+99,135,126,35},"Hello sample")) {
                 loadCode(cppMode ? "#include <iostream>\n\nint main() {\n    std::cout << \"Hello, C++!\\n\";\n}"
                                  : "#include <stdio.h>\n\nint main(void) {\n    puts(\"Hello, C!\");\n}");
-                sumChallenge=false;
+                challenge=-1;
             }
-            if(Button({x+233,135,137,35},"Sum challenge")) openChallenge();
+            if(Button({x+233,135,137,35},"Challenges",challengePicker)) challengePicker=!challengePicker;
+            if(challengePicker) {
+                Text("Choose a challenge",x,191,30);
+                float tile=(width-18)/3;
+                for(int i=0;i<static_cast<int>(std::size(challenges));++i) {
+                    float left=x+(i%3)*(tile+9), top=245+(i/3)*152.0f;
+                    Card({left,top,tile,138});
+                    Wrap(challenges[i].instruction,left+12,top+57,tile-24,17);
+                    if(Button({left+10,top+10,tile-20,38},challenges[i].title,challenge==i)) {
+                        selectChallenge(i);
+                    }
+                }
+            } else {
             bool running=job.valid();
-            if(Button({x+378,135,181,35},running ? "Working..." : sumChallenge ? "Run four tests" : "Build and run",!running) && !running) {
+            if(Button({x+378,135,181,35},running ? "Working..." : challenge>=0 ? "Run four tests" : "Build and run",!running) && !running) {
                 console="Compiling...";
                 outputScroll=0;
-                job=std::async(std::launch::async,CompileAndRun,editor.code,cppMode,sumChallenge);
+                job=std::async(std::launch::async,CompileAndRun,editor.code,cppMode,challenge);
             }
-            Text(sumChallenge ? "Read n from stdin and print the sum from 1 through n as one integer." :
-                 "Run only code you trust. It executes locally with your account permissions.",x,182,16,muted);
-            if(sumChallenge) Text("Run only trusted code. The process uses your account permissions.",x,204,15,muted);
+            if(challenge>=0) {
+                Wrap(challenges[challenge].instruction,x,180,width,17);
+                Text(TextFormat("Example input: %s   |   Expected output: %d",challenges[challenge].inputs[0],
+                                challenges[challenge].expected[0]),x,205,15,mint);
+            } else Text("Run only code you trust. It executes locally with your account permissions.",x,182,16,muted);
             float column=std::clamp(width*0.34f,290.0f,465.0f);
             float editorWidth=width-column-15;
             float workspaceY=253;
@@ -1381,6 +1503,7 @@ int main(int argc, char** argv) {
             EndScissorMode();
             Text("Ctrl+A/C/X/V  Select/copy/cut/paste   Ctrl+Z/Y  Undo/redo   Shift+wheel  Scroll sideways",
                  x,h-37,16,muted);
+            }
 #else
             Text("Edit examples or draft your own program. Copy it into your local compiler to run it.",x,137,17,muted);
             editor.Draw({x,171,width,h-272});
