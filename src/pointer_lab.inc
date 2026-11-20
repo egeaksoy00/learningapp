@@ -1,8 +1,8 @@
 namespace PointerLab {
-constexpr Color deep{16,24,32,255}, surface{23,38,47,255};
-constexpr Color teal{51,82,96,255}, grey{139,161,167,255};
-constexpr Color apricot{255,181,122,255}, bright{255,181,122,255};
-constexpr Color secondary{184,196,197,255};
+constexpr Color deep=paperViolet, surface=panel;
+constexpr Color teal{164,141,214,255}, grey=muted;
+constexpr Color apricot=violet, bright=violet;
+constexpr Color secondary=muted;
 constexpr const char* operations[]={"int a = 5, b = 8, c = 12;","int* p = &b;","int copy = *p;","++*p;","p = nullptr;"};
 constexpr const char* captions[]={
     "Initialize three independent integers. The displayed addresses are symbolic.",
@@ -20,77 +20,52 @@ constexpr State At(int step,float phase) {
 static_assert(At(3,0).b==8 && At(3,1).b==9 && At(4,0).copy==8 && !At(4,0).connected);
 
 void Glass(Rectangle r,Color rim,bool active=false) {
-    float radius=std::min(0.19f,15.0f/std::min(r.width,r.height));
-    DrawRectangleRounded({r.x+2,r.y+7,r.width,r.height},radius,12,Fade(BLACK,0.34f));
-    DrawRectangleRounded(r,radius,12,active ? Color{72,53,43,255} : surface);
-    DrawRectangleRoundedLinesEx(r,radius,12,active ? 1.8f : 1.1f,Fade(rim,active ? 0.96f : 0.55f));
-    DrawLineEx({r.x+14,r.y+2},{r.x+r.width-14,r.y+2},1.2f,Fade(ink,0.13f));
+    DrawRectangleRounded(r,0.12f,10,active ? lime : surface);
+    DrawRectangleRoundedLinesEx(r,0.12f,10,1,rim);
 }
 
-bool Control(Rectangle r,const char* label,bool selected=false,bool nav=false) {
-    bool hover=CheckCollisionPointRec(GetMousePosition(),r);
-    DrawRectangleRounded(r,0.18f,8,selected ? Color{69,52,45,255} :
-                         hover ? Color{43,66,76,255} : surface);
-    DrawRectangleRoundedLinesEx(r,0.18f,8,selected ? 1.6f : 0.8f,
-                                Fade(selected ? bright : teal,selected ? 0.9f : 0.58f));
-    if(selected) DrawLineEx({r.x+11,r.y+r.height-2},{r.x+r.width-11,r.y+r.height-2},2.2f,bright);
-    float size=17;
-    while(size>12 && MeasureTextEx(ui,label,size,0.5f).x>r.width-12) --size;
-    float tw=MeasureTextEx(ui,label,size,0.5f).x;
-    Text(label,nav ? r.x+40 : r.x+(r.width-tw)/2,r.y+(r.height-size)/2,size,selected ? bright : ink);
-    if(nav) {
-        Vector2 center{r.x+19,r.y+r.height/2};
-        const char first=label[0];
-        int sides=first=='O' ? 5 : first=='C' ? 4 : first=='V' ? 3 : first=='A' ? 12 : 6;
-        DrawPolyLinesEx(center,sides,8,first=='V' ? -90.0f : 0.0f,1.5f,selected ? bright : secondary);
-        DrawCircleV(center,2,selected ? bright : grey);
-    }
-    return hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+bool Control(Rectangle r,const char* label,bool selected=false) {
+    return Button(r,label,selected);
 }
 
-void Cell3D(Rectangle r,const char* address,const char* value,bool active,float glow) {
-    Color rim=active ? bright : Color{131,219,214,255};
-    float lift=r.width*0.11f;
-    DrawCircleGradient(static_cast<int>(r.x+r.width/2),static_cast<int>(r.y+r.height+7),
-                       r.width*1.15f,Fade(rim,0.20f+glow*0.33f),Fade(rim,0));
-    Color top=active ? Color{196,128,83,255} : Color{57,108,120,255};
-    Color side=active ? Color{112,69,48,255} : Color{34,71,82,255};
-    DrawTriangle({r.x,r.y},{r.x+r.width+lift,r.y-lift},{r.x+lift,r.y-lift},top);
-    DrawTriangle({r.x,r.y},{r.x+r.width,r.y},{r.x+r.width+lift,r.y-lift},top);
-    DrawTriangle({r.x+r.width,r.y},{r.x+r.width+lift,r.y+r.height-lift},{r.x+r.width+lift,r.y-lift},side);
-    DrawTriangle({r.x+r.width,r.y},{r.x+r.width,r.y+r.height},{r.x+r.width+lift,r.y+r.height-lift},side);
-    DrawLineEx({r.x+lift,r.y-lift},{r.x+r.width+lift,r.y-lift},1.5f,rim);
-    DrawLineEx({r.x+r.width+lift,r.y-lift},{r.x+r.width+lift,r.y+r.height-lift},1.5f,rim);
-    Glass(r,rim,active);
-    DrawRectangleGradientH(static_cast<int>(r.x+8),static_cast<int>(r.y+9),static_cast<int>(r.width-16),
-                           static_cast<int>(r.height-18),Fade(rim,0.12f),Fade(rim,0.01f));
-    DrawRectangleGradientV(static_cast<int>(r.x+7),static_cast<int>(r.y+7),static_cast<int>(r.width-14),
-                           static_cast<int>(r.height*0.41f),Fade(rim,0.30f),Fade(rim,0));
-    DrawLineEx({r.x+7,r.y+r.height-9},{r.x+r.width-7,r.y+r.height-9},1.4f,Fade(rim,0.38f));
-    Text(address,r.x,r.y-lift-22,16,secondary,true);
-    float size=std::min(39.0f,r.width*0.46f);
-    float tw=MeasureTextEx(heading,value,size,0.5f).x;
-    Text(value,r.x+(r.width-tw)/2,r.y+(r.height-size)/2,size,ink);
+void Cell3D(Rectangle r,const char* address,const char* value,bool active,float pulse) {
+    float depth=std::min(13.0f,r.width*0.12f);
+    const Color edge=active ? violet : teal;
+    DrawRectangleRounded({r.x+depth,r.y-depth,r.width,r.height},0.15f,10,edge);
+    DrawRectangleRec({r.x+r.width/2,r.y-depth,r.width/2,r.height},edge);
+    DrawRectangleRounded(r,0.15f,10,active ? lime : panel);
+    DrawRectangleRoundedLinesEx(r,0.15f,10,1.5f,edge);
+    DrawRectangleRec({r.x+10,r.y+r.height-12,(r.width-20)*std::clamp(pulse,0.0f,1.0f),3},violet);
+    Text(address,r.x,r.y-depth-21,15,ink,true);
+    float size=std::min(40.0f,r.height*0.52f);
+    while(size>12 && MeasureTextEx(mono,value,size,0.5f).x>r.width-13) --size;
+    float tw=MeasureTextEx(mono,value,size,0.5f).x;
+    Text(value,r.x+(r.width-tw)/2,r.y+(r.height-size)/2,size,ink,true);
 }
 
 Vector2 Path(Vector2 a,Vector2 b,float t) {
-    float wave=std::sin(t*PI);
-    return {a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t+wave*31};
+    return {a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t+std::sin(t*PI)*35};
 }
 void Connection(Vector2 a,Vector2 b,float extent,float signal,bool moving) {
     Vector2 last=a;
-    for(int i=1;i<=30;++i) {
-        Vector2 next=Path(a,b,extent*i/30);
-        DrawLineEx(last,next,15,Fade(apricot,0.08f));
-        DrawLineEx(last,next,8,Fade(apricot,0.22f));
-        DrawLineEx(last,next,2.6f,bright);
+    for(int i=1;i<=24;++i) {
+        Vector2 next=Path(a,b,extent*i/24);
+        DrawLineEx(last,next,3,violet);
         last=next;
     }
+    DrawCircleV(last,4,violet);
     if(moving) {
-        auto p=Path(a,b,signal*extent);
-        DrawCircleGradient(static_cast<int>(p.x),static_cast<int>(p.y),20,Fade(bright,0.75f),Fade(bright,0));
-        DrawCircleV(p,4,ink);
+        Vector2 point=Path(a,b,signal*extent);
+        DrawCircleV(point,8,violet);
+        DrawCircleV(point,5,lime);
     }
+}
+
+void Plot(Rectangle r) {
+    DrawRectangleRec(r,paperViolet);
+    for(float y=r.y+15;y<r.y+r.height;y+=19)
+        for(float x=r.x+15;x<r.x+r.width;x+=19)
+            DrawCircleV({x,y},1,teal);
 }
 
 void Stage(Rectangle r,int step,float phase,bool motion) {
@@ -101,18 +76,8 @@ void Stage(Rectangle r,int step,float phase,bool motion) {
          r.x+24,r.y+53,r.width-48,17,secondary);
     float floorY=r.y+r.height*0.79f;
     Clip(r.x+4,r.y+85,r.width-8,r.height-146);
-    DrawCircleGradient(static_cast<int>(r.x+r.width*0.60f),static_cast<int>(floorY-68),
-                       r.width*0.41f,Fade(teal,0.29f),Fade(teal,0));
-    DrawCircleGradient(static_cast<int>(r.x+r.width*0.69f),static_cast<int>(floorY-15),
-                       r.width*0.22f,Fade(apricot,0.08f),Fade(apricot,0));
-    for(int i=0;i<13;++i)
-        DrawLineEx({r.x+r.width*0.52f,r.y+r.height*0.33f},
-                   {r.x+r.width*(-0.55f+i*0.17f),floorY+55},1,Fade(teal,0.48f));
-    for(int i=0;i<8;++i) {
-        float y=floorY+55-i*i*2.2f;
-        DrawLineEx({r.x+3,y},{r.x+r.width-3,y},1,Fade(teal,0.58f));
-    }
-    float width=r.width*0.145f, gap=r.width*0.028f;
+    Plot({r.x+4,r.y+85,r.width-8,r.height-146});
+    float width=std::min(139.0f,r.width*0.145f), gap=r.width*0.028f;
     float start=r.x+r.width*0.44f;
     float front=floorY-32;
     Rectangle platform{start-24,front,3*width+2*gap+49,36};
@@ -134,7 +99,7 @@ void Stage(Rectangle r,int step,float phase,bool motion) {
                    step==2 ? 1-std::min(1.0f,phase/0.8f) : std::min(1.0f,phase/0.8f),
                    motion && (step==2 || step==3) && phase<0.93f);
     if(state.pointerExists) {
-        Glass(pointer,state.connected ? Color{108,194,190,255} : teal);
+        Glass(pointer,state.connected ? violet : teal);
         Text("p (int*)",pointer.x+12,pointer.y+9,16,secondary,true);
         Text(state.connected ? "0x104" : "nullptr",pointer.x+12,pointer.y+32,24,ink,true);
     }

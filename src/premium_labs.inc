@@ -2,17 +2,7 @@ namespace PremiumLabs {
 using namespace PointerLab;
 
 void Floor(Rectangle r) {
-    DrawRectangleGradientV(static_cast<int>(r.x),static_cast<int>(r.y),static_cast<int>(r.width),
-                           static_cast<int>(r.height),Color{18,48,51,255},deep);
-    Vector2 vanishing{r.x+r.width*0.52f,r.y+r.height*0.27f};
-    for(int i=-7;i<=7;++i)
-        DrawLineEx(vanishing,{r.x+r.width*(0.5f+i*0.15f),r.y+r.height},1,Fade(teal,0.28f));
-    for(int i=1;i<=8;++i) {
-        float t=i/8.0f, y=vanishing.y+(r.y+r.height-vanishing.y)*t*t;
-        DrawLineEx({r.x,y},{r.x+r.width,y},1,Fade(teal,0.28f));
-    }
-    DrawCircleGradient(static_cast<int>(r.x+r.width*0.55f),static_cast<int>(r.y+r.height*0.72f),
-                       r.width*0.38f,Fade(teal,0.32f),Fade(teal,0));
+    Plot(r);
 }
 void Block(Rectangle r,const char* label,const char* value,bool active,float phase=1) {
     float appear=Ease(phase);
@@ -30,8 +20,8 @@ void DrawArray(Rectangle stage,int step,float phase,const std::array<int,3>& val
     Clip(space.x,space.y,space.width,space.height);
     Floor(space);
     float cw=std::min(140.0f,(space.width-110)/4.0f), gap=std::min(34.0f,cw*0.25f);
-    float left=space.x+(space.width-(3*cw+2*gap))/2;
-    float cy=space.y+space.height*0.45f;
+    float left=space.x+(space.width-3*(cw+gap)+2)/2;
+    float cy=space.y+space.height*0.43f;
     int current=std::max(0,step-1);
     float marker=left+(current==0 ? 0 : current-1)*(cw+gap)+
                  (step>1 ? Ease(phase)*(cw+gap) : 0);
@@ -40,9 +30,13 @@ void DrawArray(Rectangle stage,int step,float phase,const std::array<int,3>& val
                        Fade(bright,0.26f),Fade(bright,0));
     for(int i=0;i<3;++i) {
         bool active=step==i+1;
-        Block({left+i*(cw+gap),cy,cw,cw*0.75f},TextFormat("a[%d]",i),
-              TextFormat("%d",values[i]),active);
-        Text(TextFormat("[%d]",i),left+i*(cw+gap)+cw*0.35f,cy+cw*0.86f,15,secondary,true);
+        float x=left+i*(cw+gap);
+        Rectangle slot{x,cy,cw+gap-2,space.height*0.39f};
+        DrawRectangleRec(slot,active ? lime : panel);
+        DrawRectangleLinesEx(slot,2,active ? violet : teal);
+        Text(TextFormat("a[%d]",i),x+12,cy+10,15,muted,true);
+        Text(TextFormat("%d",values[i]),x+12,cy+33,30,ink,true);
+        Text(TextFormat("[%d]",i),x+12,cy+slot.height+9,15,secondary,true);
     }
     Text("i",marker+cw*0.43f,cy-55,21,bright,true);
     DrawLineEx({marker+cw/2,cy-27},{marker+cw/2,cy-5},2,bright);
@@ -63,6 +57,8 @@ void DrawHeap(Rectangle stage,int step,float phase) {
     Rectangle space{stage.x+5,stage.y+91,stage.width-10,stage.height-159};
     Clip(space.x,space.y,space.width,space.height); Floor(space);
     float divider=space.x+space.width*0.49f;
+    DrawRectangleRounded({space.x+15,space.y+11,space.width*0.47f-26,space.height-22},0.15f,10,Fade(panel,0.65f));
+    DrawRectangleRounded({divider+12,space.y+11,space.width*0.51f-28,space.height-22},0.15f,10,Fade(panel,0.65f));
     DrawLineEx({divider,space.y+18},{divider,space.y+space.height-14},1,Fade(grey,0.55f));
     Text("CALL STACK",space.x+25,space.y+19,14,codeType);
     Text("DYNAMIC STORAGE",divider+25,space.y+19,14,codeType);
@@ -119,17 +115,25 @@ void DrawLinked(Rectangle stage,int step,float phase) {
     Clip(space.x,space.y,space.width,space.height); Floor(space);
     float cw=std::min(145.0f,space.width*0.21f);
     float x0=space.x+space.width*0.12f,x1=space.x+space.width*0.43f,x2=space.x+space.width*0.73f;
-    float y=space.y+space.height*0.32f;
+    float y=space.y+space.height*0.29f, nodeH=space.height*0.34f;
     float newY=y+(step>=3 ? (1-Ease(phase))*space.height*0.27f : space.height*0.27f);
-    Connection({x0+cw,y+cw*0.38f},{x2,y+cw*0.38f},step==3 ? 1-Ease(phase) : 1,1,false);
-    if(step>=2) Connection({x1+cw,newY+cw*0.38f},{x2,y+cw*0.38f},
+    Connection({x0+cw,y+nodeH*0.5f},{x2,y+nodeH*0.5f},step==3 ? 1-Ease(phase) : 1,1,false);
+    if(step>=2) Connection({x1+cw,newY+nodeH*0.5f},{x2,y+nodeH*0.5f},
                            step==2 ? Ease(phase) : 1,1,false);
-    if(step>=3) Connection({x0+cw,y+cw*0.38f},{x1,newY+cw*0.38f},Ease(phase),1,false);
-    Block({x0,y,cw,cw*0.76f},"head", "10",step==3);
-    Block({x2,y,cw,cw*0.76f},"tail", "30",false);
-    if(step>=1) Block({x1,newY,cw,cw*0.76f},"new node", "20",true,step==1 ? phase : 1);
-    DrawLineEx({x2+cw*0.45f,y+cw*0.78f},{x2+cw*0.45f,y+cw*0.91f},1.5f,grey);
-    Text("nullptr",x2+cw*0.09f,y+cw*0.94f,15,secondary,true);
+    if(step>=3) Connection({x0+cw,y+nodeH*0.5f},{x1,newY+nodeH*0.5f},Ease(phase),1,false);
+    auto node=[&](float x,float top,const char* label,const char* value,bool selected) {
+        Text(label,x,top-23,15,ink,true);
+        Rectangle box{x,top,cw,nodeH};
+        DrawRectangleRounded(box,0.2f,10,selected ? lime : panel);
+        DrawRectangleRoundedLinesEx(box,0.2f,10,2,teal);
+        DrawLineEx({x+cw*0.65f,top+9},{x+cw*0.65f,top+nodeH-9},1,teal);
+        Text(value,x+15,top+nodeH/2-14,28,ink,true);
+        DrawCircleV({x+cw*0.81f,top+nodeH/2},5,violet);
+    };
+    node(x0,y,"head","10",step==3);
+    node(x2,y,"tail","30",false);
+    if(step>=1) node(x1,newY,"new node","20",true);
+    Text("nullptr",x2+cw*0.08f,y+nodeH+9,15,secondary,true);
     EndScissorMode();
     Text(step==3 && phase>=0.8f ? "10 -> 20 -> 30 -> nullptr" : "10 -> 30 -> nullptr",stage.x+23,
          stage.y+stage.height-42,16,ink,true);
@@ -140,28 +144,31 @@ void DrawBubble(Rectangle stage,const std::vector<SortFrame>& trace,int step,flo
     Clip(space.x,space.y,space.width,space.height); Floor(space);
     const auto& frame=trace[step];
     float cw=std::min(145.0f,space.width*0.2f), gap=std::min(40.0f,cw*0.3f);
-    float left=space.x+(space.width-3*cw-2*gap)/2, y=space.y+space.height*0.42f;
+    float left=space.x+(space.width-3*cw-2*gap)/2, baseline=space.y+space.height-40;
     int sortedFrom=3;
     for(int i=1;i<=step;++i) if(trace[i].left==1) sortedFrom=2;
     if(step+1==static_cast<int>(trace.size())) sortedFrom=0;
-    for(int i=sortedFrom;i<3;++i) {
-        Rectangle zone{left+i*(cw+gap)-8,y-18,cw+16,cw+43};
-        DrawRectangleRounded(zone,0.12f,6,Fade(teal,0.16f));
-        Text("SORTED",zone.x+14,zone.y+zone.height-18,11,codeType);
-    }
+    DrawLineEx({left-20,baseline},{left+3*cw+2*gap+20,baseline},2,teal);
+    int low=*std::min_element(frame.values.begin(),frame.values.end());
+    int high=*std::max_element(frame.values.begin(),frame.values.end());
     for(int i=0;i<3;++i) {
         bool selected=frame.left>=0 && (i==frame.left || i==frame.left+1);
         int from=frame.swapped && selected ? 2*frame.left+1-i : i;
         float pos=from+(i-from)*Ease(phase);
-        float lift=frame.swapped && selected ? std::sin(phase*PI)*(i==frame.left ? -29.0f : 29.0f) : 0;
-        Block({left+pos*(cw+gap),y+lift,cw,cw*0.78f},TextFormat("a[%d]",i),
-              TextFormat("%d",frame.values[i]),selected);
-        Text(TextFormat("[%d]",i),left+i*(cw+gap)+cw*0.38f,y+cw*0.9f,15,secondary,true);
+        float lift=frame.swapped && selected ? std::sin(phase*PI)*(i==frame.left ? 19.0f : -19.0f) : 0;
+        float fraction=static_cast<float>(frame.values[i]-low)/std::max(1,high-low);
+        float height=space.height*(0.25f+fraction*0.26f);
+        float xx=left+pos*(cw+gap), yy=baseline-height-lift;
+        DrawRectangleRounded({xx,yy,cw,height},0.21f,10,selected ? lime : i>=sortedFrom ? violet : panel);
+        DrawRectangleRoundedLinesEx({xx,yy,cw,height},0.21f,10,1.5f,teal);
+        Text(TextFormat("%d",frame.values[i]),xx+15,yy+8,27,(!selected && i>=sortedFrom) ? WHITE : ink,true);
+        Text(TextFormat("[%d]",i),left+i*(cw+gap)+cw*0.38f,baseline+10,15,secondary,true);
+        if(i>=sortedFrom) Text("SORTED",xx+cw-60,yy+16,11,selected ? ink : WHITE);
     }
     if(frame.left>=0) {
         float cx=left+(frame.left+0.5f)*(cw+gap)+cw*0.5f;
-        Text(frame.swapped ? "SWAP" : "COMPARE",cx-42,y-58,15,bright);
-        DrawLineEx({cx,y-31},{cx,y-9},2,bright);
+        Text(frame.swapped ? "SWAP" : "COMPARE",cx-34,space.y+17,15,bright);
+        DrawLineEx({cx-40,space.y+42},{cx+40,space.y+42},2,violet);
     }
     EndScissorMode();
     Text(SortStep(trace,step).c_str(),stage.x+23,stage.y+stage.height-42,16,secondary);

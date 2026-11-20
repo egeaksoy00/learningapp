@@ -20,21 +20,19 @@
                 if(lab==5) return SortStep(sortTrace,i);
                 return LabCaption(lab,i);
             };
-            float railW=149, workX=x+railW+14, workW=width-railW-14;
-            Text("Experiments",x,107,20);
-            Text("Step through a program",x,132,14,P::secondary);
+            float workX=x, workW=width;
+            Text("Experiments",x,111,18);
+            Text("Step through a program",x+126,113,15,P::secondary);
+            float tabWidth=(workW-40)/6;
             for(int i=0;i<6;++i) {
-                float yy=163+i*56.0f;
-                if(P::Control({x,yy,railW,48},visualLabs[i].name,i==lab) && i!=lab) {
+                if(P::Control({x+i*(tabWidth+8),142,tabWidth,42},visualLabs[i].name,i==lab) && i!=lab) {
                     lab=i; count=labCount(); step=0; timer=0; playing=false;
                     labMotion=0; phasePaused=false; observedLab=lab; observedStep=step;
                     scene=FindScene(lab);
                 }
             }
-            Text("ACTIVE MODEL",x,522,13,P::apricot);
-            Wrap("Choose a model, then use the transport controls to inspect each state.",x,547,railW,15);
             float phase=motion ? labMotion : 1.0f;
-            Rectangle stage{workX,108,workW,h-291};
+            Rectangle stage{workX,199,workW,h-382};
             if(lab==0) P::Stage(stage,step,phase,motion);
             else if(lab==1) PremiumLabs::DrawArray(stage,step,phase,arrayInputs[arrayInput]);
             else if(lab==2) PremiumLabs::DrawHeap(stage,step,phase);
@@ -52,7 +50,7 @@
                 }
             }
             Rectangle dock{workX,stage.y+stage.height+11,workW,94};
-            P::Glass(dock,P::teal);
+            DrawRectangleRounded(dock,0.18f,10,rail);
             float stateX=dock.x+dock.width*0.68f;
             DrawLineEx({stateX,dock.y+12},{stateX,dock.y+dock.height-12},1,P::teal);
             if(P::Control({dock.x+12,dock.y+10,67,30},"Code",!pointerTrace)) pointerTrace=false;
@@ -96,7 +94,8 @@
             }
             Text(state1.c_str(),stateX+12,dock.y+41,15,ink,true);
             Text(state2.c_str(),stateX+12,dock.y+64,14,P::secondary,true);
-            float footY=h-69;
+            float footY=h-65;
+            Text("ACTIVE MODEL",workX+327,footY-2,12,P::secondary);
             if(P::Control({workX,footY,66,37},"Restart")) seek(0,false);
             if(P::Control({workX+73,footY,49,37},"Prev")) seek(step-1,true);
             if(P::Control({workX+129,footY,64,37},playing ? "Pause" : "Play",true)) {
@@ -110,7 +109,7 @@
             if(P::Control({workX+200,footY,49,37},"Next")) seek(step+1,false);
             const char* rates[]={"0.5x","1x","2x"};
             if(P::Control({workX+256,footY,55,37},rates[speed])) speed=(speed+1)%3;
-            Rectangle timeline{workX+326,footY,workW-326,37};
+            Rectangle timeline{workX+436,footY,workW-436,37};
             float tx=timeline.x+8, span=timeline.width-16;
             DrawLineEx({tx,timeline.y+18},{tx+span,timeline.y+18},2,P::teal);
             DrawLineEx({tx,timeline.y+18},{tx+span*(step+phase)/count,timeline.y+18},2,P::apricot);

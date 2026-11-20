@@ -158,26 +158,66 @@ void Clip(float x,float y,float w,float h) {
                      static_cast<int>(w*uiScale),static_cast<int>(h*uiScale));
 }
 void Card(Rectangle r, Color c = panel) {
-    float radius=std::min(0.22f,15.0f/std::min(r.width,r.height));
-    DrawRectangleRounded({r.x+1,r.y+5,r.width,r.height},radius,10,Fade(BLACK,0.25f));
-    DrawRectangleRounded(r,radius,10,c);
-    DrawRectangleRoundedLinesEx(r,radius,10,1,Fade(seam,0.58f));
-    DrawLineEx({r.x+13,r.y+1},{r.x+r.width-13,r.y+1},1,Fade(ink,0.06f));
+    DrawRectangleRounded(r,0.16f,10,c);
+    if(c.r==panel.r || c.r==rail.r) DrawRectangleRoundedLinesEx(r,0.16f,10,1,seam);
 }
 bool Button(Rectangle r, const char* s, bool active = false, Color tint = led) {
-    bool hover = CheckCollisionPointRec(GetMousePosition(), r);
-    Card(r, active ? litSurface : hover ? hoverSurface : rail);
-    if(active || hover) {
-        DrawRectangleRoundedLinesEx(r,0.20f,10,1.4f,Fade(active ? tint : codeType,0.88f));
-    }
+    bool hover = CheckCollisionPointRec(GetMousePosition(),r);
+    Color fill=active ? (tint.r==errorColor.r ? errorFill : tint.r==successColor.r ? successFill : tint) :
+                        hover ? hoverSurface : panel;
+    bool inverse=active && tint.r==led.r && tint.g==led.g;
+    DrawRectangleRounded(r,0.34f,10,fill);
+    if(!active || hover) DrawRectangleRoundedLinesEx(r,0.34f,10,hover ? 2.0f : 1.0f,hover ? violet : seam);
     float size=18;
-    float available=r.width-20;
-    while(size>13 && MeasureTextEx(ui,s,size,0.5f).x>available) --size;
+    while(size>13 && MeasureTextEx(ui,s,size,0.5f).x>r.width-18) --size;
+    const float labelWidth=MeasureTextEx(ui,s,size,0.5f).x;
     Clip(r.x,r.y,r.width,r.height);
-    Text(s, r.x + 13, r.y + (r.height - size) / 2, size, ink);
+    Text(s,r.x+(r.width-labelWidth)/2,r.y+(r.height-size)/2,size,inverse ? WHITE : ink);
     EndScissorMode();
     return hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
+void StudioMark(Vector2 p,float size,Color base) {
+    DrawRectangleRounded({p.x,p.y,size,size},0.30f,10,base);
+    float unit=size/7;
+    DrawLineEx({p.x+2*unit,p.y+2*unit},{p.x+3*unit,p.y+3.5f*unit},unit*0.49f,lime);
+    DrawLineEx({p.x+3*unit,p.y+3.5f*unit},{p.x+2*unit,p.y+5*unit},unit*0.49f,lime);
+    DrawLineEx({p.x+4*unit,p.y+5*unit},{p.x+5.4f*unit,p.y+5*unit},unit*0.49f,lime);
+}
+
+void DrawStudioIntro(float w,float h,float time) {
+    DrawRectangleRec({0,0,w,h},violet);
+    float cell=std::clamp(w/9,85.0f,165.0f), stride=cell+16;
+    float left=(w-5*stride+16)/2, row=h*0.50f;
+    float route=std::clamp((time-0.45f)/1.40f,0.0f,1.0f);
+    float travel=1-std::pow(1-route,3.0f);
+    Color track=Color{159,135,222,255};
+    for(int i=0;i<5;++i) {
+        float center=left+i*stride+cell/2;
+        DrawLineEx({center,h*0.12f},{center,h*0.87f},1,Fade(track,0.38f));
+    }
+    DrawLineEx({left,row+cell/2},{left+5*stride-16,row+cell/2},2,track);
+    const char* symbols[]={"{ }","&","p","*p","++"};
+    for(int i=0;i<5;++i) {
+        float arrival=std::clamp((time-0.09f-i*0.12f)/0.62f,0.0f,1.0f);
+        float lift=std::pow(1-arrival,3.0f)*70;
+        float px=left+i*stride, y=row+lift;
+        bool live=static_cast<int>(travel*4+0.5f)==i;
+        DrawRectangleRounded({px,y,cell,cell},0.14f,10,Fade(live ? lime : paperViolet,arrival));
+        float size=cell*0.27f, tw=MeasureTextEx(mono,symbols[i],size,0.5f).x;
+        Text(symbols[i],px+(cell-tw)/2,y+(cell-size)/2,size,Fade(violet,arrival),true);
+        Text(TextFormat("0x%03X",0x100+i*4),px,y+cell+12,14,Fade(paperViolet,arrival),true);
+    }
+    float titleSize=std::min(82.0f,w*0.071f);
+    float titleW=MeasureTextEx(heading,"CodePath Studio",titleSize,0.5f).x;
+    Text("CodePath Studio",(w-titleW)/2,h*0.245f,titleSize,WHITE);
+    const char* tagline="C AND C++ LEARNING WORKSPACE";
+    Text(tagline,(w-MeasureTextEx(ui,tagline,18,0.5f).x)/2,h*0.395f,18,paperViolet);
+    const char* skip="Click or press a key to skip";
+    Rectangle badge{w/2-125,h-68,250,41};
+    DrawRectangleRounded(badge,0.65f,10,paperViolet);
+    Text(skip,(w-MeasureTextEx(ui,skip,16,0.5f).x)/2,badge.y+11,16,ink);
+}
+
 void NavIcon(int id,Vector2 c,Color color) {
     const float x=c.x,y=c.y;
     if(id==0) {
@@ -501,7 +541,7 @@ void CodeLine(const std::string& line, float x, float y, float size) {
                    (c >= 'A' && c <= 'Z') || c == '_') {
             i = line.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_",i);
             if (i == std::string::npos) i = line.size();
-            if (c >= '0' && c <= '9') color = Color{255,198,120,255};
+            if (c >= '0' && c <= '9') color = Color{145,63,22,255};
             else if (keywords.find(" " + line.substr(start,i-start) + " ") != std::string::npos) color = codeType;
         }
         std::string token = line.substr(start,i-start);
@@ -971,7 +1011,8 @@ int SelfTest() {
 
 int main(int argc, char** argv) {
     if(argc==2 && std::string(argv[1])=="--self-test") return SelfTest();
-    bool captureScreens=argc==3 && std::string(argv[1])=="--capture-screenshots";
+    const bool captureWindow=argc==3 && std::string(argv[1])=="--capture-windowed";
+    const bool captureScreens=captureWindow || (argc==3 && std::string(argv[1])=="--capture-screenshots");
     std::filesystem::path captureDirectory;
     if(captureScreens) {
         captureDirectory=std::filesystem::u8path(argv[2]);
@@ -1019,7 +1060,7 @@ int main(int argc, char** argv) {
     SetWindowMinSize(1000,700);
 #endif
     SetTargetFPS(60);
-    if(captureScreens) ToggleBorderlessWindowed();
+    if(captureScreens && !captureWindow) ToggleBorderlessWindowed();
     ui=mono=heading=GetFontDefault();
     auto fontPath=[&](const char* name) {
         auto path=std::filesystem::path(GetApplicationDirectory())/"assets"/"fonts"/name;
@@ -1113,7 +1154,7 @@ int main(int argc, char** argv) {
     std::mt19937 rng(std::random_device{}());
     const char* paths[]={"ALL","C","C++","EXAM"};
     const char* nav[]={"Overview","Curriculum","Assessments","Visual labs","Code notebook","Progress"};
-    auto saveNow=[&]{ saved=WriteProgress(save,scores,current); };
+    auto saveNow=[&]{ if(!captureScreens) saved=WriteProgress(save,scores,current); };
     auto pick=[&](int id){
         if(current!=id) {
             current=id; lessonScroll=0; exploreStep=0; exploreValue=15;
@@ -1143,7 +1184,10 @@ int main(int argc, char** argv) {
             page=captureIndex<5 ? capturePages[captureIndex] : captureIndex<=6 ? Assess : Visualize;
             if(captureIndex==5 && quiz.questions.empty()) quiz.Start({current},rng);
             if(captureIndex==6) { quiz.index=quiz.questions.size(); quiz.correct=1; }
-            if(captureIndex>=7) { lab=captureIndex-7; step=1; }
+            if(captureIndex>=7 && captureIndex<13) {
+                const int stages[]={3,2,3,4,3,2};
+                lab=captureIndex-7; step=stages[lab];
+            }
         }
         bool keyActivity=false, fullscreenKey=false;
         for(int key=GetKeyPressed();key!=0;key=GetKeyPressed()) {
@@ -1153,12 +1197,12 @@ int main(int argc, char** argv) {
         if(fullscreenKey || fullscreenRequested) ToggleBorderlessWindowed();
         fullscreenRequested=false;
         float screenW=static_cast<float>(GetScreenWidth()), screenH=static_cast<float>(GetScreenHeight());
-        uiScale=std::min(screenW/1120.0f,screenH/748.0f);
+        uiScale=std::min(screenW/1120.0f,screenH/790.0f);
         float w=std::min(1530.0f,screenW/uiScale), h=screenH/uiScale;
         uiInset=static_cast<int>((screenW-w*uiScale)/2);
         SetMouseOffset(-uiInset,0);
         SetMouseScale(1/uiScale,1/uiScale);
-        float x=235, width=w-x-25, dt=GetFrameTime();
+        float x=32, width=w-64, dt=GetFrameTime();
 #ifdef _WIN32
         if(job.valid() && job.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
             try { console=job.get(); }
@@ -1199,62 +1243,46 @@ int main(int argc, char** argv) {
         BeginDrawing();
         ClearBackground(bg);
         BeginMode2D({{static_cast<float>(uiInset),0},{0,0},0,uiScale});
-        if(introTime<4) {
+        if(introTime<4 && !captureScreens) {
             bool skip=IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || keyActivity || !motion;
             introTime=skip ? 4 : std::min(4.0f,introTime+dt);
-            float open=Ease(introTime/1.1f), fade=Ease((4-introTime)/0.65f);
-            DrawRectangleGradientH(0,0,static_cast<int>(w),static_cast<int>(h),rail,bg);
-            for(int i=0;i<14;++i) {
-                float radius=45+i*19.0f+introTime*7;
-                DrawRing({w/2,h/2-36},radius,radius+1,31+i*17+introTime*24,224+i*17+introTime*24,
-                         64,Fade(i%2 ? led : codeType,(0.16f-i*0.007f)*fade));
+            if(introTime<4) {
+                DrawStudioIntro(w,h,introTime);
+                EndMode2D();
+                EndDrawing();
+                continue;
             }
-            const char* marks[]={"{ }","< >","&","*","[ ]"};
-            for(int i=0;i<5;++i) {
-                float angle=i*1.2566f+introTime*0.22f;
-                Text(marks[i],w/2+std::cos(angle)*(108+open*103),h/2-37+std::sin(angle)*139,
-                     27,Fade(i%2 ? led : codeType,open*fade*0.65f),true);
-            }
-            Card({w/2-190,h/2-84+(1-open)*26,380,103},Fade(rail,open*fade));
-            Text("CodePath Studio",w/2-157,h/2-65+(1-open)*26,46,Fade(ink,open*fade));
-            Text("C AND C++ LEARNING WORKSPACE",w/2-137,h/2+30,16,Fade(led,open*fade));
-            Text("Click or press a key to skip",w/2-98,h-59,17,muted);
             EndMode2D();
             EndDrawing();
             continue;
         }
-        DrawRectangleGradientV(208,0,static_cast<int>(w)-208,static_cast<int>(h),Color{22,39,49,255},bg);
-        DrawRectangleGradientV(0,0,208,static_cast<int>(h),Color{24,43,52,255},Color{17,30,39,255});
-        DrawLineEx({208,0},{208,h},1,seam);
-        for(int i=0;i<8;++i) {
-            float yy=108+i*i*77.0f;
-            DrawLineEx({208,yy},{w,yy-h*0.23f},1,Fade(seam,0.11f));
-        }
-        Card({20,27,42,42},rail);
-        DrawRectangleRoundedLinesEx({20,27,42,42},0.27f,8,2,led);
-        Text(">_",27,35,22,led,true);
-        Text("CodePath",73,26,24);
-        Text("S T U D I O",74,53,12,led);
+        DrawRectangleRec({0,0,w,57},panel);
+        DrawRectangleRec({0,56,w,1},seam);
+        StudioMark({x,13},29,violet);
+        Text("CodePath Studio",x+41,17,20);
         const Page navOrder[]={Home,Learn,Visualize,Notebook,Assess,Progress};
+        float tabW=std::min(144.0f,(width-236)/6), navX=x+width-tabW*6;
         for(int i=0;i<6;++i) {
             Page destination=navOrder[i];
-            Rectangle item{20,115+i*50.0f,167,41};
+            Rectangle item{navX+i*tabW,8,tabW-4,41};
+            bool selected=page==destination;
             bool hovered=CheckCollisionPointRec(GetMousePosition(),item);
-            if(page==destination)
-                DrawRectangleRounded(item,0.17f,8,litSurface);
-            else if(hovered)
-                DrawRectangleRounded(item,0.17f,8,hoverSurface);
-            if(page==destination)
-                DrawRectangleRec({item.x,item.y+6,3,item.height-12},led);
-            NavIcon(destination,{item.x+21,item.y+20},page==destination ? led : muted);
-            Text(nav[destination],item.x+43,item.y+11,16,page==destination ? ink : muted);
+            if(selected || hovered)
+                DrawRectangleRounded(item,0.38f,10,selected ? litSurface : hoverSurface);
+            NavIcon(destination,{item.x+16,item.y+20},selected ? violet : muted);
+            Text(nav[destination],item.x+32,item.y+11,16,selected ? violet : ink);
             if(hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 if(page!=destination) playing=false;
                 page=destination;
             }
         }
-        if(Button({20,h-124,167,32},motion ? "Motion on" : "Motion off")) motion=!motion;
-        if(Button({20,h-207,167,34},introEnabled ? "Intro on" : "Intro off")) {
+        float footerY=h-42;
+        DrawRectangleRec({0,footerY,w,42},panel);
+        DrawRectangleRec({0,footerY,w,1},seam);
+        Text("LOCAL PROFILE",x,footerY+12,13,muted);
+        Text(TextFormat("LEVEL %d  /  %d XP",level,xp),x+121,footerY+11,15,violet);
+        Bar(x+251,footerY+18,101,displayed);
+        if(Button({w-x-347,footerY+5,96,32},introEnabled ? "Intro on" : "Intro off")) {
             if(introEnabled) {
                 std::filesystem::create_directories(save.parent_path(),introError);
                 std::ofstream marker(introSetting);
@@ -1264,63 +1292,59 @@ int main(int argc, char** argv) {
                 if(!introError) introEnabled=true;
             }
         }
-        Bar(21,h-72,166,displayed);
-        Text(TextFormat("LEVEL %d  /  %d XP",level,xp),21,h-55,15,led);
-        Text("LOCAL PROFILE",21,h-31,12,muted);
-        if(Button({20,h-167,167,34},IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) ? "Exit fullscreen" : "Fullscreen  F11"))
+        if(Button({w-x-242,footerY+5,98,32},motion ? "Motion on" : "Motion off")) motion=!motion;
+        if(Button({w-x-135,footerY+5,135,32},IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) ? "Exit fullscreen" : "Fullscreen  F11"))
             fullscreenRequested=true;
-        Text("CodePath Studio",x,18,15,muted);
-        Text(nav[page],x,45,38);
+        h=footerY;
+        Text(nav[page],x,66,32);
         if(!saved) Text("Progress could not be saved",x,h-25,15,errorColor);
 
         if(page==Home) {
             // The start page is a live demonstration, with the courses as the next stop.
-            float heroY=107, heroH=std::min(395.0f,h*0.54f);
-            DrawRectangleGradientH(static_cast<int>(x),static_cast<int>(heroY),static_cast<int>(width),
-                                   static_cast<int>(heroH),Color{29,55,64,255},rail);
-            DrawRectangleLinesEx({x,heroY,width,heroH},1,seam);
-            Text("Learn by changing the state.",x+25,heroY+21,30);
-            Text("A live memory experiment",x+27,heroY+63,17,muted);
-            float boardX=x+width*0.37f, boardW=width*0.61f;
-            PremiumLabs::DrawHomeMemory(memoryBoard,{boardX,heroY+78,boardW,heroH-96},motion);
+            float heroY=112, heroH=h-162, heroW=width*0.67f;
+            DrawRectangleRounded({x,heroY,heroW,heroH},0.09f,12,violet);
+            Text("Learn by changing",x+29,heroY+25,48,WHITE);
+            Text("the state.",x+29,heroY+77,48,lime);
+            Text("A live memory experiment",x+32,heroY+145,18,paperViolet);
+            float boardY=heroY+187, boardH=heroH-297;
+            PremiumLabs::DrawHomeMemory(memoryBoard,{x+23,boardY,heroW-46,boardH},motion);
             memoryBoard.Update(dt,motion);
-            Text("POINTER ADDRESS",x+26,heroY+119,14,codeType);
-            Text(TextFormat("p = 0x%X",0x100+4*memoryBoard.target),x+26,heroY+145,27,ink,true);
-            Wrap("Select a memory cell, then write through the pointer.",x+26,heroY+194,width*0.30f,18);
-            if(Button({x+25,heroY+268,width*0.29f,45},memoryBoard.writing ? "Writing..." : "Execute ++*p",true) && !memoryBoard.writing) {
+            Text("POINTER ADDRESS",x+28,heroY+heroH-92,13,paperViolet);
+            Text(TextFormat("p = 0x%X",0x100+4*memoryBoard.target),x+28,heroY+heroH-70,25,WHITE,true);
+            Wrap("Select a memory cell, then write through the pointer.",x+29,heroY+heroH-36,heroW-50,15,paperViolet);
+            if(Button({x+heroW-322,heroY+heroH-90,153,40},memoryBoard.writing ? "Writing..." : "Execute ++*p",true,lime) && !memoryBoard.writing) {
                 memoryBoard.pendingTarget=memoryBoard.target;
                 memoryBoard.travel=0;
                 memoryBoard.writing=true;
             }
-            if(Button({x+25,heroY+321,width*0.29f,38},"Open pointer lab")) {
+            if(Button({x+heroW-159,heroY+heroH-90,132,40},"Open pointer lab")) {
                 lab=0; step=0; playing=false; timer=0; page=Visualize;
             }
-            float routesY=heroY+heroH+18, routeH=std::max(139.0f,h-routesY-67);
-            Text("Continue your path",x,routesY,23);
-            if(Button({x+width-183,routesY-4,183,36},"Continue learning",true)) {
+            float routeX=x+heroW+24, routesY=heroY+20, tile=width-heroW-24;
+            Text("Continue your path",routeX,routesY,26);
+            if(Button({routeX,routesY+47,tile,42},"Continue learning",true)) {
                 path=0;
                 auto list=filter(path);
                 offset=std::max(0,static_cast<int>(std::find(list.begin(),list.end(),current)-list.begin())-2);
                 page=Learn;
             }
             const char* routeName[]={"C fundamentals","C++ systems","Practice"};
-            float gap=13, tile=(width-2*gap)/3, cardY=routesY+44;
+            float startY=routesY+112, stride=(heroY+heroH-startY)/3;
             for(int i=0;i<3;++i) {
-                float left=x+i*(tile+gap);
-                Card({left,cardY,tile,routeH-40},rail);
-                DrawRectangleRec({left,cardY,3,routeH-40},i==2 ? codeType : led);
+                float left=routeX, cardY=startY+i*stride;
+                DrawRectangleRec({left,cardY,tile,1},seam);
                 Text(routeName[i],left+17,cardY+14,21);
                 if(i==2) {
-                    Wrap("Test a topic or compile a short program.",left+17,cardY+49,tile-34,16);
-                    if(Button({left+17,cardY+routeH-88,tile-34,35},"Mixed assessment")) mixed();
+                    Wrap("Test a topic or compile a short program.",left+17,cardY+43,tile-34,16);
+                    if(Button({left+17,cardY+82,tile-34,35},"Mixed assessment")) mixed();
                     continue;
                 }
                 auto course=filter(i+1);
                 int done=0;
                 for(int id:course) done+=scores[id].correct>0;
-                Text(TextFormat("%d / %d lessons mastered",done,static_cast<int>(course.size())),left+17,cardY+49,16,muted);
-                Bar(left+17,cardY+82,tile-34,static_cast<float>(done)/course.size());
-                if(Button({left+17,cardY+routeH-88,tile-34,35},"Open course")) {
+                Text(TextFormat("%d / %d lessons mastered",done,static_cast<int>(course.size())),left+17,cardY+43,16,muted);
+                Bar(left+17,cardY+69,tile-34,static_cast<float>(done)/course.size());
+                if(Button({left+17,cardY+82,tile-34,35},"Open course")) {
                     path=i+1; offset=0;
                     auto next=std::find_if(course.begin(),course.end(),[&](int id){return scores[id].correct==0;});
                     pick(next==course.end() ? course.front() : *next);
@@ -1358,10 +1382,12 @@ int main(int argc, char** argv) {
             }
             const Lesson& item=lessons[current];
             Card({bx,226,bw,h-244},panel);
-            DrawRectangleRec({bx+1,226,5,h-244},led);
+            float readingW=bw*0.38f;
+            DrawRectangleRec({bx+readingW,279,1,h-424},seam);
             Text(TextFormat("%s   /   LESSON %02d",item.path,current+1),bx+25,241,14,led);
-            float titleEnd=Wrap(item.title,bx+26,266,bw-52,32,ink);
-            float by=Wrap(item.body,bx+26,titleEnd+10,bw-52,19)+16;
+            float titleEnd=Wrap(item.title,bx+26,271,readingW-52,36,ink);
+            float bodyEnd=Wrap(item.body,bx+26,titleEnd+19,readingW-55,20);
+            float contentX=bx+readingW+24, contentW=bw-readingW-49, by=284;
             float actions=h-127;
             auto details=LessonDetails(current);
             if(!details.empty() && Button({bx+bw-142,236,127,32},lessonDetail ? "Code example" : "Deep dive",lessonDetail)) {
@@ -1372,9 +1398,9 @@ int main(int argc, char** argv) {
                 lessonExplore=!lessonExplore; lessonDetail=false;
             }
             if(lessonExplore) {
-                LessonExplorer(current,exploreValue,exploreStep,exploreBound,{bx+17,by,bw-34,actions-by});
+                LessonExplorer(current,exploreValue,exploreStep,exploreBound,{contentX,by,contentW,actions-by});
             } else if(lessonDetail && !details.empty()) {
-                Rectangle area{bx+15,by,bw-30,actions-by-15};
+                Rectangle area{contentX,by,contentW,actions-by-15};
                 Card(area,rail);
                 if(CheckCollisionPointRec(GetMousePosition(),area))
                     lessonScroll-=static_cast<int>(GetMouseWheelMove()*38);
@@ -1388,17 +1414,12 @@ int main(int argc, char** argv) {
                 EndScissorMode();
                 lessonScroll=std::min(lessonScroll,std::max(0,static_cast<int>(dy+lessonScroll-area.y-area.height)));
             } else {
-            Text("WORKED EXAMPLE",bx+17,by,13,codeType);
-            float codeHeight=actions-by-40;
-            bool hasPracticeNote=codeHeight>=298;
-            if(hasPracticeNote) codeHeight-=74;
-            Example(item.code,{bx+15,by+24,bw-30,codeHeight},19);
-            if(hasPracticeNote) {
-                float noteY=by+codeHeight+37;
-                Text("WATCH FOR THIS",bx+19,noteY,14,led);
-                Wrap(LessonNote(current),
-                     bx+19,noteY+22,bw-38,18);
-            }
+                Text("WORKED EXAMPLE",contentX,by,14,codeType);
+                Example(item.code,{contentX,by+28,contentW,actions-by-40},18);
+                if(bodyEnd+90<actions) {
+                    Text("WATCH FOR THIS",bx+26,bodyEnd+25,14,led);
+                    Wrap(LessonNote(current),bx+26,bodyEnd+51,readingW-55,17);
+                }
             }
             if(Button({bx+15,actions,112,37},"Practice",true)) startQuiz({current});
             if(Button({bx+134,actions,127,37},"Edit example")) {
@@ -1444,9 +1465,9 @@ int main(int argc, char** argv) {
         } else if(page==Assess) {
             if(quiz.questions.empty()) {
                 float leftW=width*0.55f, rightX=x+leftW+14, rightW=width-leftW-14;
-                Card({x,109,leftW,h-132},rail);
+                Card({x,109,leftW,h-132},panel);
                 DrawRectangleGradientV(static_cast<int>(x+1),110,static_cast<int>(leftW-2),
-                                       static_cast<int>((h-132)*0.55f),Color{35,68,76,255},rail);
+                                       static_cast<int>((h-132)*0.55f),paperViolet,panel);
                 Text("Practice changes understanding.",x+25,146,32);
                 Wrap("Choose a lesson to check what you know, or take a mixed assessment across the curriculum.",
                      x+26,205,leftW-52,19);
@@ -1456,7 +1477,7 @@ int main(int argc, char** argv) {
                 if(Button({x+25,405,leftW-50,49},"Practice this lesson",true)) startQuiz({current});
                 if(Button({x+25,467,leftW-50,47},"Start mixed assessment")) mixed();
                 Text("Hints are available before answering; explanations follow.",x+26,541,16,muted);
-                Card({rightX,109,rightW,h-132},rail);
+                Card({rightX,109,rightW,h-132},panel);
                 Text("Focused practice",rightX+19,132,24);
                 Wrap("Questions from one track",rightX+20,168,rightW-40,17);
                 for(int i=1;i<=3;++i) {
@@ -1484,7 +1505,7 @@ int main(int argc, char** argv) {
             } else if(quiz.index>=quiz.questions.size()) {
                 Card({x,109,width,h-132},rail);
                 DrawRectangleGradientH(static_cast<int>(x+1),110,static_cast<int>(width-2),
-                                       static_cast<int>((h-132)*0.55f),Color{36,65,73,255},rail);
+                                       static_cast<int>((h-132)*0.55f),paperViolet,panel);
                 Text("Assessment complete",x+30,145,32);
                 MasteryRing({x+width*0.72f,329},static_cast<float>(quiz.correct)/quiz.questions.size());
                 Text(TextFormat("%d / %d",quiz.correct,static_cast<int>(quiz.questions.size())),x+35,239,51);
@@ -1560,9 +1581,10 @@ int main(int argc, char** argv) {
                     if(quiz.hint) Wrap(item.hint,answerX,yy+53,answerW,18);
                 } else {
                     DrawRectangleRec({answerX-8,yy,3,54},quiz.selected==0 ? successColor : errorColor);
-                    Text(quiz.selected==0 ? "Correct" : TextFormat("Incorrect. Correct answer: %s",item.answers[0]),
-                         answerX,yy,20,quiz.selected==0 ? successColor : errorColor);
-                    yy=Wrap(item.explanation,answerX,yy+30,answerW,17);
+                    yy=Wrap(quiz.selected==0 ? "Correct" : TextFormat("Incorrect. Correct answer: %s",item.answers[0]),
+                            answerX,yy,answerW,20,
+                            quiz.selected==0 ? successColor : errorColor);
+                    yy=Wrap(item.explanation,answerX,yy+5,answerW,17);
                     if(Button({answerX,yy+8,158,40},quiz.index+1==quiz.questions.size() ? "See results" : "Next question",true))
                         quiz.Advance(rng);
                 }
@@ -1605,26 +1627,27 @@ int main(int argc, char** argv) {
                 Text(TextFormat("Example input: %s   |   Expected output: %d",challenges[challenge].inputs[0],
                                 challenges[challenge].expected[0]),x,205,15,led);
             } else Text("Run only code you trust. It executes locally with your account permissions.",x,182,16,muted);
-            float editorWidth=width;
+            float editorWidth=width*0.62f;
             float workspaceY=253;
             float workspaceHeight=h-workspaceY-59;
-            float editorHeight=workspaceHeight*0.62f;
-            float outputY=workspaceY+editorHeight+33;
-            float outputHeight=h-outputY-48;
+            float editorHeight=workspaceHeight;
+            float outputY=workspaceY;
+            float outputHeight=editorHeight;
+            float consoleX=x+editorWidth+14;
             DrawRectangleRec({x,workspaceY-35,width,27},rail);
             DrawRectangleRec({x,workspaceY-35,3,27},led);
             Text(cppMode ? "main.cpp" : "main.c",x+13,workspaceY-31,16,ink,true);
-            Text("SOURCE",x+width-82,workspaceY-29,13,muted);
+            Text("SOURCE",x+editorWidth-82,workspaceY-29,13,muted);
             const char* outputTitle=running ? "COMPILING AND RUNNING" : console.empty() ? "OUTPUT  /  READY" :
                 console.find("Build failed")!=std::string::npos ? "OUTPUT  /  BUILD FAILED" : "OUTPUT  /  RUN REPORT";
-            Text(outputTitle,x,outputY-26,15,led);
+            Text(outputTitle,consoleX+10,outputY-29,15,led);
             if(running) {
                 float pulse=motion ? static_cast<float>(std::fmod(GetTime()*0.6,1.0)) : 0.5f;
-                DrawRectangleRec({x+pulse*(width-35),outputY-5,35,2},led);
+                DrawRectangleRec({consoleX+pulse*(width-editorWidth-50),outputY-5,35,2},led);
             }
             editor.Draw({x,workspaceY,editorWidth,editorHeight});
-            Rectangle outputBox{x,outputY,width,outputHeight};
-            Card(outputBox,rail);
+            Rectangle outputBox{consoleX,outputY,width-editorWidth-14,outputHeight};
+            DrawRectangleRounded(outputBox,0.10f,10,terminal);
             std::istringstream stream(console.empty() ? "Compiler output appears here.\nRun an example or choose\na coding challenge." : console);
             std::vector<std::string> lines;
             std::string line;
@@ -1649,8 +1672,8 @@ int main(int argc, char** argv) {
             Clip(outputBox.x+8,outputBox.y+7,outputBox.width-16,outputBox.height-14);
             for(int i=0;i<outputRows && i+outputScroll<static_cast<int>(lines.size());++i) {
                 const auto& output=lines[i+outputScroll];
-                Color tone=output.find("FAIL")!=std::string::npos || output.find("error ")!=std::string::npos ? errorColor :
-                           output.find("PASS")!=std::string::npos || output=="Build succeeded" ? successColor : ink;
+                Color tone=output.find("FAIL")!=std::string::npos || output.find("error ")!=std::string::npos ? terminalError :
+                           output.find("PASS")!=std::string::npos || output=="Build succeeded" ? lime : paperViolet;
                 Text(output.c_str(),outputBox.x+12,outputBox.y+10+i*20,16,tone,true);
             }
             EndScissorMode();
@@ -1666,21 +1689,19 @@ int main(int argc, char** argv) {
 #endif
         } else if(page==Progress) {
             // A single progress instrument anchors the page; tracks and awards follow.
-            float top=109, featureW=width*0.34f, tracksX=x+featureW+14;
-            float tracksW=width-featureW-14, upperH=h-top-217;
-            Card({x,top,featureW,upperH},rail);
-            DrawRectangleGradientV(static_cast<int>(x+1),static_cast<int>(top+1),
-                                   static_cast<int>(featureW-2),static_cast<int>(upperH*0.53f),
-                                   Color{35,66,73,255},rail);
-            Text("Your learning",x+20,top+19,25);
-            MasteryRing({x+featureW/2,top+150},displayed);
-            Text(TextFormat("Level %d",level),x+21,top+254,28);
-            Text(TextFormat("%d XP earned",xp),x+22,top+294,18,led);
-            DrawRectangleRec({x+20,top+329,featureW-40,1},seam);
-            Text(TextFormat("%d / %d lessons mastered",mastered,static_cast<int>(lessons.size())),x+21,top+346,16,muted);
+            float top=115, featureW=width*0.29f, tracksX=x+featureW+22;
+            float tracksW=width-featureW-22, upperH=h-top-193;
+            DrawRectangleRounded({x,top,featureW,upperH},0.12f,10,violet);
+            Text("Your learning",x+23,top+25,26,WHITE);
+            Text(TextFormat("%d%%",static_cast<int>(displayed*100+0.5f)),x+21,top+86,72,lime,true);
+            DrawRectangleRec({x+24,top+178,featureW-48,7},paperViolet);
+            DrawRectangleRec({x+24,top+178,(featureW-48)*displayed,7},lime);
+            Text(TextFormat("Level %d",level),x+24,top+220,29,WHITE);
+            Text(TextFormat("%d XP earned",xp),x+25,top+266,18,paperViolet);
+            Text(TextFormat("%d / %d lessons mastered",mastered,static_cast<int>(lessons.size())),x+25,top+324,17,WHITE);
             Text(attempts ? TextFormat("%d%% answer accuracy",static_cast<int>(100.0*correct/attempts)) :
-                            "No answers recorded yet",x+21,top+371,16,muted);
-            Card({tracksX,top,tracksW,upperH},rail);
+                            "No answers recorded yet",x+25,top+352,17,paperViolet);
+            Card({tracksX,top,tracksW,upperH},panel);
             Text("Curriculum tracks",tracksX+19,top+16,24);
             float row=(upperH-57)/3;
             for(int p=1;p<=3;++p) {
@@ -1702,13 +1723,13 @@ int main(int argc, char** argv) {
                         DrawCircleGradient(static_cast<int>(node.x),static_cast<int>(node.y),11,Fade(led,0.6f),Fade(led,0));
                     DrawCircleV(node,hover ? 5.0f : 4.0f,scores[id].correct ? led : muted);
                     DrawCircleLinesV(node,hover ? 8.0f : 6.0f,Fade(scores[id].correct ? led : muted,0.72f));
-                    if(hover) Text(lessons[id].title,tracksX+23,y+row-55,15,ink);
+                    if(hover) Text(lessons[id].title,tracksX+23,y+57,15,ink);
                     if(hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                         path=p; offset=static_cast<int>(i); pick(id); page=Learn;
                     }
                 }
             }
-            float awardsY=top+upperH+15, awardsH=h-awardsY-19;
+            float awardsY=top+upperH+15;
             Text("Achievements",x,awardsY,23);
             const char* badges[]={"First Mastery","Pointer Explorer","Curriculum Complete"};
             const char* goals[]={"Answer a lesson question correctly.","Master the Pointers quiz.","Master every lesson."};
@@ -1716,7 +1737,7 @@ int main(int argc, char** argv) {
             float awardGap=12, awardW=(width-2*awardGap)/3;
             for(int i=0;i<3;++i) {
                 float left=x+i*(awardW+awardGap), y=awardsY+35;
-                Card({left,y,awardW,awardsH-35},unlocked[i] ? litSurface : rail);
+                DrawRectangleRec({left,y,awardW,2},unlocked[i] ? violet : seam);
                 DrawCircleV({left+23,y+26},7,unlocked[i] ? led : muted);
                 Text(badges[i],left+40,y+14,19,unlocked[i] ? led : ink);
                 Wrap(goals[i],left+17,y+53,awardW-34,16,muted);
@@ -1726,10 +1747,11 @@ int main(int argc, char** argv) {
                 if(scores[i].attempts>0 && scores[i].correct==0) weak.push_back(static_cast<int>(i));
             if(!weak.empty() && Button({x+width-198,awardsY-3,198,32},"Practice weak topics")) startQuiz(std::move(weak));
         }
+        if(captureScreens && captureIndex>=13) DrawStudioIntro(w,h+42,captureIndex==13 ? 2.75f : 1.15f);
         if(reward>0) {
             float opacity=motion ? std::min(1.0f,reward*2.4f) : 1.0f;
-            Card({w-203,31,179,38},Fade(panel,opacity));
-            Text("+100 XP   /   MASTERY",w-190,42,15,Fade(led,opacity));
+            Card({w-203,62,179,38},Fade(panel,opacity));
+            Text("+100 XP   /   MASTERY",w-190,73,15,Fade(led,opacity));
         }
         if(previousPage!=page) { previousPage=page; reveal=0; }
         reveal=motion ? std::min(1.0f,reveal+dt*5) : 1;
@@ -1740,7 +1762,7 @@ int main(int argc, char** argv) {
         if(captureScreens && ++captureFrame>=18) {
             const char* names[]={"home","lessons","notebook","progress","assessments",
                                  "quiz","quiz-result","lab-pointer","lab-array","lab-heap",
-                                 "lab-recursion","lab-linked","lab-bubble"};
+                                 "lab-recursion","lab-linked","lab-bubble","intro","intro-in-motion"};
             Image shot=LoadImageFromScreen();
             if(shot.width>GetScreenWidth() || shot.height>GetScreenHeight())
                 ImageCrop(&shot,{0,static_cast<float>(GetScreenHeight()),
@@ -1750,7 +1772,7 @@ int main(int argc, char** argv) {
             UnloadImage(shot);
             ++captureIndex;
             captureFrame=0;
-            if(captureIndex==13) break;
+            if(captureIndex==15) break;
         }
     }
     if(ui.texture.id!=GetFontDefault().texture.id) UnloadFont(ui);
