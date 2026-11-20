@@ -32,8 +32,8 @@ void DrawArray(Rectangle stage,int step,float phase,const std::array<int,3>& val
         bool active=step==i+1;
         float x=left+i*(cw+gap);
         Rectangle slot{x,cy,cw+gap-2,space.height*0.39f};
-        DrawRectangleRec(slot,active ? lime : panel);
-        DrawRectangleLinesEx(slot,2,active ? violet : teal);
+        DrawRectangleRec(slot,active ? Blend(panel,brass,Arrival(phase/0.65f)) : panel);
+        DrawRectangleLinesEx(slot,2,active ? primary : teal);
         Text(TextFormat("a[%d]",i),x+12,cy+10,15,muted,true);
         Text(TextFormat("%d",values[i]),x+12,cy+33,30,ink,true);
         Text(TextFormat("[%d]",i),x+12,cy+slot.height+9,15,secondary,true);
@@ -69,13 +69,19 @@ void DrawHeap(Rectangle stage,int step,float phase) {
     if(step>=2) {
         bool freed=step>=4;
         float appearance=step==2 ? phase : step==4 ? 1-0.35f*Ease(phase) : 1;
+        if(step==2) {
+            float reserve=Arrival(phase/0.68f);
+            DrawRectangleRoundedLinesEx({heap.x-10,heap.y-12,heap.width+32,heap.height+22},0.16f,10,2,Fade(signalInk,reserve));
+            heap.y+=20*(1-reserve);
+        }
         Block(heap,"heap / 0x800",freed ? "released" : step==2 ? "uninitialized" : "42",
               !freed,appearance);
         if(!freed) Connection({pointer.x+pointer.width,pointer.y+pointer.height*0.52f},
                                {heap.x,heap.y+heap.height*0.52f},step==2 ? Ease(phase) : 1,
                                Ease(phase),step==3 && phase<0.9f);
         else {
-            DrawLineEx({heap.x-7,heap.y-5},{heap.x+heap.width+7,heap.y+heap.height+5},2,errorColor);
+            float release=step==4 ? Arrival(phase/0.65f) : 1;
+            DrawLineEx({heap.x-7,heap.y-5},{heap.x-7+(heap.width+14)*release,heap.y-5+(heap.height+10)*release},2,errorColor);
             Text("DO NOT DEREFERENCE",divider+35,heap.y+heap.height+32,14,errorColor);
         }
     }
@@ -102,8 +108,15 @@ void DrawRecursion(Rectangle stage,int step,float phase) {
         float y=space.y+26+std::max(0,active-1)*stride;
         float tokenX=space.x+space.width*0.65f;
         DrawCircleGradient(static_cast<int>(tokenX),static_cast<int>(y+22),47,Fade(bright,0.28f),Fade(bright,0));
+        if(active>0) {
+            Vector2 from{tokenX-12,y+31}, to{space.x+fw+12,y+30};
+            float travel=Arrival(phase/0.82f);
+            Connection(from,to,travel,1,false);
+            Vector2 token=Path(from,to,travel);
+            DrawCircleV(token,7,signalInk);
+            DrawCircleV(token,4,brass);
+        }
         Text(TextFormat("return %d",returns[step-4]),tokenX-48,y+9,20,bright,true);
-        if(active>0) Connection({tokenX-12,y+31},{space.x+fw+12,y+30},Ease(phase),1,false);
     }
     EndScissorMode();
     Text(TextFormat("ACTIVE FRAMES   %d       FINAL RESULT   %s",active,step==7 ? "24" : "pending"),
@@ -124,15 +137,15 @@ void DrawLinked(Rectangle stage,int step,float phase) {
     auto node=[&](float x,float top,const char* label,const char* value,bool selected) {
         Text(label,x,top-23,15,ink,true);
         Rectangle box{x,top,cw,nodeH};
-        DrawRectangleRounded(box,0.2f,10,selected ? lime : panel);
+        DrawRectangleRounded(box,0.2f,10,selected ? brass : panel);
         DrawRectangleRoundedLinesEx(box,0.2f,10,2,teal);
         DrawLineEx({x+cw*0.65f,top+9},{x+cw*0.65f,top+nodeH-9},1,teal);
         Text(value,x+15,top+nodeH/2-14,28,ink,true);
-        DrawCircleV({x+cw*0.81f,top+nodeH/2},5,violet);
+        DrawCircleV({x+cw*0.81f,top+nodeH/2},5,primary);
     };
     node(x0,y,"head","10",step==3);
     node(x2,y,"tail","30",false);
-    if(step>=1) node(x1,newY,"new node","20",true);
+    if(step>=1) node(x1,newY+(step==1 ? 13*(1-Arrival(phase/0.55f)) : 0),"new node","20",true);
     Text("nullptr",x2+cw*0.08f,y+nodeH+9,15,secondary,true);
     EndScissorMode();
     Text(step==3 && phase>=0.8f ? "10 -> 20 -> 30 -> nullptr" : "10 -> 30 -> nullptr",stage.x+23,
@@ -154,12 +167,13 @@ void DrawBubble(Rectangle stage,const std::vector<SortFrame>& trace,int step,flo
     for(int i=0;i<3;++i) {
         bool selected=frame.left>=0 && (i==frame.left || i==frame.left+1);
         int from=frame.swapped && selected ? 2*frame.left+1-i : i;
-        float pos=from+(i-from)*Ease(phase);
-        float lift=frame.swapped && selected ? std::sin(phase*PI)*(i==frame.left ? 19.0f : -19.0f) : 0;
+        float travel=Ease(std::clamp((phase-0.13f)/0.70f,0.0f,1.0f));
+        float pos=from+(i-from)*travel;
+        float lift=frame.swapped && selected ? std::sin(travel*PI)*(i==frame.left ? 40.0f : -25.0f) : 0;
         float fraction=static_cast<float>(frame.values[i]-low)/std::max(1,high-low);
         float height=space.height*(0.25f+fraction*0.26f);
         float xx=left+pos*(cw+gap), yy=baseline-height-lift;
-        DrawRectangleRounded({xx,yy,cw,height},0.21f,10,selected ? lime : i>=sortedFrom ? violet : panel);
+        DrawRectangleRounded({xx,yy,cw,height},0.21f,10,selected ? brass : i>=sortedFrom ? primary : panel);
         DrawRectangleRoundedLinesEx({xx,yy,cw,height},0.21f,10,1.5f,teal);
         Text(TextFormat("%d",frame.values[i]),xx+15,yy+8,27,(!selected && i>=sortedFrom) ? WHITE : ink,true);
         Text(TextFormat("[%d]",i),left+i*(cw+gap)+cw*0.38f,baseline+10,15,secondary,true);
@@ -168,7 +182,10 @@ void DrawBubble(Rectangle stage,const std::vector<SortFrame>& trace,int step,flo
     if(frame.left>=0) {
         float cx=left+(frame.left+0.5f)*(cw+gap)+cw*0.5f;
         Text(frame.swapped ? "SWAP" : "COMPARE",cx-34,space.y+17,15,bright);
-        DrawLineEx({cx-40,space.y+42},{cx+40,space.y+42},2,violet);
+        float spread=40+30*Arrival(phase/0.35f);
+        DrawLineEx({cx-spread,space.y+42},{cx+spread,space.y+42},2,signalInk);
+        DrawLineEx({cx-spread,space.y+42},{cx-spread,space.y+51},2,signalInk);
+        DrawLineEx({cx+spread,space.y+42},{cx+spread,space.y+51},2,signalInk);
     }
     EndScissorMode();
     Text(SortStep(trace,step).c_str(),stage.x+23,stage.y+stage.height-42,16,secondary);

@@ -157,64 +157,97 @@ void Clip(float x,float y,float w,float h) {
     BeginScissorMode(uiInset+static_cast<int>(x*uiScale),static_cast<int>(y*uiScale),
                      static_cast<int>(w*uiScale),static_cast<int>(h*uiScale));
 }
+bool animateUi=true;
+float animationDt=0;
+
+Color Blend(Color from,Color to,float t) {
+    return ColorLerp(from,to,std::clamp(t,0.0f,1.0f));
+}
+
+float Approach(float value,float target,float rate) {
+    return animateUi ? target+(value-target)*std::exp(-rate*animationDt) : target;
+}
+
+float Arrival(float t) {
+    float remainder=1-std::clamp(t,0.0f,1.0f);
+    return 1-remainder*remainder*remainder;
+}
+
 void Card(Rectangle r, Color c = panel) {
-    DrawRectangleRounded(r,0.16f,10,c);
-    if(c.r==panel.r || c.r==rail.r) DrawRectangleRoundedLinesEx(r,0.16f,10,1,seam);
+    DrawRectangleRounded(r,std::min(0.16f,18.0f/std::min(r.width,r.height)),10,c);
+    if(c.r==panel.r || c.r==rail.r) DrawRectangleRoundedLinesEx(r,std::min(0.16f,18.0f/std::min(r.width,r.height)),10,1,seam);
 }
 bool Button(Rectangle r, const char* s, bool active = false, Color tint = led) {
     bool hover = CheckCollisionPointRec(GetMousePosition(),r);
-    Color fill=active ? (tint.r==errorColor.r ? errorFill : tint.r==successColor.r ? successFill : tint) :
-                        hover ? hoverSurface : panel;
+    // Track the hovered surface without moving the input target.
+    static Rectangle hoveredRect{};
+    static float hoverStart=-10, pressStart=-10;
+    const float now=static_cast<float>(GetTime());
+    bool same=r.x==hoveredRect.x && r.y==hoveredRect.y && r.width==hoveredRect.width;
+    if(hover && !same) { hoveredRect=r; hoverStart=now; pressStart=-10; same=true; }
+    if(hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) pressStart=now;
+    float hoverAmount=hover ? (animateUi ? Arrival((now-hoverStart)/0.18f) : 1.0f) : 0;
+    float press=animateUi && same ? std::max(0.0f,1-(now-pressStart)/0.16f) : 0;
+    Color base=active ? (tint.r==errorColor.r ? errorFill : tint.r==successColor.r ? successFill : tint) : panel;
+    Color fill=Blend(base,active ? ink : hoverSurface,hoverAmount*(active ? 0.12f : 1.0f));
+    fill=Blend(fill,ink,press*0.14f);
     bool inverse=active && tint.r==led.r && tint.g==led.g;
+    const Rectangle hit=r;
+    r={r.x+press*1.5f,r.y+press*1.7f,r.width-press*3,r.height-press*3};
     DrawRectangleRounded(r,0.34f,10,fill);
-    if(!active || hover) DrawRectangleRoundedLinesEx(r,0.34f,10,hover ? 2.0f : 1.0f,hover ? violet : seam);
+    if(!active || hover) DrawRectangleRoundedLinesEx(r,0.34f,10,1+hoverAmount,Blend(seam,primary,hoverAmount));
     float size=18;
     while(size>13 && MeasureTextEx(ui,s,size,0.5f).x>r.width-18) --size;
     const float labelWidth=MeasureTextEx(ui,s,size,0.5f).x;
     Clip(r.x,r.y,r.width,r.height);
     Text(s,r.x+(r.width-labelWidth)/2,r.y+(r.height-size)/2,size,inverse ? WHITE : ink);
     EndScissorMode();
-    return hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+    return CheckCollisionPointRec(GetMousePosition(),hit) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 void StudioMark(Vector2 p,float size,Color base) {
     DrawRectangleRounded({p.x,p.y,size,size},0.30f,10,base);
     float unit=size/7;
-    DrawLineEx({p.x+2*unit,p.y+2*unit},{p.x+3*unit,p.y+3.5f*unit},unit*0.49f,lime);
-    DrawLineEx({p.x+3*unit,p.y+3.5f*unit},{p.x+2*unit,p.y+5*unit},unit*0.49f,lime);
-    DrawLineEx({p.x+4*unit,p.y+5*unit},{p.x+5.4f*unit,p.y+5*unit},unit*0.49f,lime);
+    DrawLineEx({p.x+2*unit,p.y+2*unit},{p.x+3*unit,p.y+3.5f*unit},unit*0.49f,brass);
+    DrawLineEx({p.x+3*unit,p.y+3.5f*unit},{p.x+2*unit,p.y+5*unit},unit*0.49f,brass);
+    DrawLineEx({p.x+4*unit,p.y+5*unit},{p.x+5.4f*unit,p.y+5*unit},unit*0.49f,brass);
 }
 
 void DrawStudioIntro(float w,float h,float time) {
-    DrawRectangleRec({0,0,w,h},violet);
-    float cell=std::clamp(w/9,85.0f,165.0f), stride=cell+16;
-    float left=(w-5*stride+16)/2, row=h*0.50f;
-    float route=std::clamp((time-0.45f)/1.40f,0.0f,1.0f);
-    float travel=1-std::pow(1-route,3.0f);
-    Color track=Color{159,135,222,255};
-    for(int i=0;i<5;++i) {
-        float center=left+i*stride+cell/2;
-        DrawLineEx({center,h*0.12f},{center,h*0.87f},1,Fade(track,0.38f));
-    }
-    DrawLineEx({left,row+cell/2},{left+5*stride-16,row+cell/2},2,track);
+    DrawRectangleRec({0,0,w,h},terminal);
+    const float cell=std::clamp(w/10,80.0f,137.0f), stride=cell+22;
+    const float left=(w-5*stride+22)/2, row=h*0.50f;
+    const float trace=std::clamp((time-0.78f)/1.36f,0.0f,1.0f);
+    const float signal=left+cell/2+4*stride*trace;
+    const float busY=row+cell*0.5f;
+    DrawLineEx({left,busY},{left+5*stride-22,busY},2,Fade(draft,0.35f));
+    DrawLineEx({left,busY},{signal,busY},3,brass);
     const char* symbols[]={"{ }","&","p","*p","++"};
     for(int i=0;i<5;++i) {
-        float arrival=std::clamp((time-0.09f-i*0.12f)/0.62f,0.0f,1.0f);
-        float lift=std::pow(1-arrival,3.0f)*70;
-        float px=left+i*stride, y=row+lift;
-        bool live=static_cast<int>(travel*4+0.5f)==i;
-        DrawRectangleRounded({px,y,cell,cell},0.14f,10,Fade(live ? lime : paperViolet,arrival));
-        float size=cell*0.27f, tw=MeasureTextEx(mono,symbols[i],size,0.5f).x;
-        Text(symbols[i],px+(cell-tw)/2,y+(cell-size)/2,size,Fade(violet,arrival),true);
-        Text(TextFormat("0x%03X",0x100+i*4),px,y+cell+12,14,Fade(paperViolet,arrival),true);
+        const float px=left+i*stride;
+        const float appear=Arrival((time-0.08f-i*0.11f)/0.57f);
+        const float y=row+(1-appear)*54;
+        const float cellPhase=std::clamp((trace*4-i)*3+1,0.0f,1.0f);
+        const Color fill=Blend(hero,i==4 ? brass : litSurface,cellPhase);
+        const Rectangle frame{px,y,cell,cell};
+        DrawLineEx({px+cell/2,row-46},{px+cell/2,row+cell+34},1,Fade(draft,0.16f*appear));
+        DrawRectangleRounded(frame,0.13f,12,Fade(fill,appear));
+        DrawRectangleRoundedLinesEx(frame,0.13f,12,1,Fade(seam,appear));
+        const float size=cell*0.30f, tw=MeasureTextEx(mono,symbols[i],size,0.5f).x;
+        Text(symbols[i],px+(cell-tw)/2,y+(cell-size)/2,size,Fade(Blend(onDark,ink,cellPhase),appear),true);
+        Text(TextFormat("0x%03X",0x100+i*4),px,y+cell+12,14,Fade(draft,appear),true);
+        if(time>0.8f && trace<1 && std::abs(signal-(px+cell/2))<stride*0.55f)
+            DrawLineEx({px+8,y+cell-8},{px+cell-8,y+cell-8},3,brass);
     }
-    float titleSize=std::min(82.0f,w*0.071f);
-    float titleW=MeasureTextEx(heading,"CodePath Studio",titleSize,0.5f).x;
-    Text("CodePath Studio",(w-titleW)/2,h*0.245f,titleSize,WHITE);
+    if(trace>0 && trace<1) DrawCircleV({signal,busY},6,brass);
+    const float titleReveal=Arrival((time-0.86f)/1.28f);
+    const float titleSize=std::min(82.0f,w*0.071f);
+    const float titleW=MeasureTextEx(heading,"CodePath Studio",titleSize,0.5f).x;
+    Text("CodePath Studio",(w-titleW)/2,h*0.245f+24*(1-titleReveal),titleSize,Fade(onDark,titleReveal));
     const char* tagline="C AND C++ LEARNING WORKSPACE";
-    Text(tagline,(w-MeasureTextEx(ui,tagline,18,0.5f).x)/2,h*0.395f,18,paperViolet);
+    Text(tagline,(w-MeasureTextEx(ui,tagline,18,0.5f).x)/2,h*0.395f,18,Fade(draft,Arrival((time-1.68f)/0.7f)));
     const char* skip="Click or press a key to skip";
     Rectangle badge{w/2-125,h-68,250,41};
-    DrawRectangleRounded(badge,0.65f,10,paperViolet);
+    DrawRectangleRounded(badge,0.65f,10,draft);
     Text(skip,(w-MeasureTextEx(ui,skip,16,0.5f).x)/2,badge.y+11,16,ink);
 }
 
@@ -1011,10 +1044,11 @@ int SelfTest() {
 
 int main(int argc, char** argv) {
     if(argc==2 && std::string(argv[1])=="--self-test") return SelfTest();
+    const bool captureMotion=argc==3 && std::string(argv[1])=="--capture-motion";
     const bool captureWindow=argc==3 && std::string(argv[1])=="--capture-windowed";
     const bool captureScreens=captureWindow || (argc==3 && std::string(argv[1])=="--capture-screenshots");
     std::filesystem::path captureDirectory;
-    if(captureScreens) {
+    if(captureScreens || captureMotion) {
         captureDirectory=std::filesystem::u8path(argv[2]);
         std::filesystem::create_directories(captureDirectory);
     }
@@ -1095,8 +1129,9 @@ int main(int argc, char** argv) {
 #endif
     auto introSetting=save.parent_path()/"skip-intro";
     std::error_code introError;
-    bool introEnabled=!std::filesystem::exists(introSetting,introError);
-    float introTime=introEnabled ? 0.0f : 4.0f;
+    bool introEnabled=captureMotion || !std::filesystem::exists(introSetting,introError);
+    float introTime=(introEnabled || captureMotion) ? 0.0f : 4.0f;
+    float introExit=1;
     int current=0, path=0, offset=0, lab=0, step=0, speed=1;
     ReadProgress(save,scores,current);
     bool saved=true, playing=false, motion=true;
@@ -1105,7 +1140,10 @@ int main(int argc, char** argv) {
     int lessonScroll=0,exploreStep=0,exploreValue=15,exploreBound=4;
     bool lessonExplore=false;
     float timer=0, reward=0, displayed=0;
-    float labMotion=1, quizProgress=0, reveal=1;
+    float labMotion=1, quizProgress=0;
+    float pageAge=1, selectionX=0, lessonAge=1, quizAge=1, answerAge=1;
+    int lessonKey=-1, questionKey=-1, lastAnswer=-1;
+    float outputAge=1;
     Page previousPage=Home;
     int observedLab=-1, observedStep=-1, observedIndex=-1;
     const std::array<int,3> sortInputs[]={{5,2,4},{9,5,1},{4,4,2},{1,4,9}};
@@ -1154,7 +1192,7 @@ int main(int argc, char** argv) {
     std::mt19937 rng(std::random_device{}());
     const char* paths[]={"ALL","C","C++","EXAM"};
     const char* nav[]={"Overview","Curriculum","Assessments","Visual labs","Code notebook","Progress"};
-    auto saveNow=[&]{ if(!captureScreens) saved=WriteProgress(save,scores,current); };
+    auto saveNow=[&]{ if(!captureScreens && !captureMotion) saved=WriteProgress(save,scores,current); };
     auto pick=[&](int id){
         if(current!=id) {
             current=id; lessonScroll=0; exploreStep=0; exploreValue=15;
@@ -1178,7 +1216,58 @@ int main(int argc, char** argv) {
         pool.resize(8);
         startQuiz(std::move(pool));
     };
+    // Record the exact frame presented in the window at a fixed readback resolution.
+    RenderTexture2D recording{};
+    if(captureMotion) recording=LoadRenderTexture(960,611);
+    const double recordingStart=GetTime();
+    double nextFrame=0;
+    float demoElapsed=0;
+    int demoScene=-1;
+    auto beginFrame=[&](Color background) {
+        BeginDrawing();
+        if(captureMotion) BeginTextureMode(recording);
+        ClearBackground(background);
+        BeginMode2D({{static_cast<float>(uiInset),0},{0,0},0,uiScale});
+    };
+    auto endFrame=[&] {
+        EndMode2D();
+        if(captureMotion) {
+            EndTextureMode();
+            DrawTexturePro(recording.texture,{0,0,960,-611},
+                           {0,0,static_cast<float>(GetScreenWidth()),static_cast<float>(GetScreenHeight())},
+                           {0,0},0,WHITE);
+            if(demoElapsed>=nextFrame) {
+                nextFrame=demoElapsed+1.0/14;
+                Image shot=LoadImageFromTexture(recording.texture);
+                ImageFlipVertical(&shot);
+                auto path=(captureDirectory/TextFormat("%06d.bmp",static_cast<int>(demoElapsed*1000))).string();
+                ExportImage(shot,path.c_str());
+                UnloadImage(shot);
+            }
+        }
+        EndDrawing();
+    };
     while(!WindowShouldClose()) {
+        if(captureMotion) {
+            demoElapsed=static_cast<float>(GetTime()-recordingStart);
+            int scene=demoElapsed<5.0f ? 0 : demoElapsed<6.2f ? 1 : demoElapsed<7.5f ? 2 :
+                      demoElapsed<12.8f ? 3 : demoElapsed<18.7f ? 4 : demoElapsed<23.0f ? 5 : 6;
+            if(scene!=demoScene) {
+                demoScene=scene;
+                if(scene==1) page=Learn;
+                if(scene==2) page=Notebook;
+                if(scene==3 || scene==4) {
+                    page=Visualize;
+                    lab=scene==3 ? 0 : 5;
+                    step=scene==3 ? 2 : 0;
+                    speed=scene==3 ? 1 : 2;
+                    playing=true;
+                    timer=0;
+                }
+                if(scene==5) { playing=false; startQuiz({4}); }
+                if(scene==6) break;
+            }
+        }
         if(captureScreens) {
             const Page capturePages[]={Home,Learn,Notebook,Progress,Assess,Visualize};
             page=captureIndex<5 ? capturePages[captureIndex] : captureIndex<=6 ? Assess : Visualize;
@@ -1196,18 +1285,34 @@ int main(int argc, char** argv) {
         }
         if(fullscreenKey || fullscreenRequested) ToggleBorderlessWindowed();
         fullscreenRequested=false;
-        float screenW=static_cast<float>(GetScreenWidth()), screenH=static_cast<float>(GetScreenHeight());
+        float screenW=captureMotion ? 960.0f : static_cast<float>(GetScreenWidth());
+        float screenH=captureMotion ? 611.0f : static_cast<float>(GetScreenHeight());
         uiScale=std::min(screenW/1120.0f,screenH/790.0f);
         float w=std::min(1530.0f,screenW/uiScale), h=screenH/uiScale;
         uiInset=static_cast<int>((screenW-w*uiScale)/2);
         SetMouseOffset(-uiInset,0);
-        SetMouseScale(1/uiScale,1/uiScale);
+        SetMouseScale(screenW/GetScreenWidth()/uiScale,screenH/GetScreenHeight()/uiScale);
         float x=32, width=w-64, dt=GetFrameTime();
+        animationDt=std::min(dt,0.05f);
+        animateUi=motion;
+        introExit=motion ? std::min(1.0f,introExit+dt/0.66f) : 1.0f;
+        if(introTime<4 && !captureScreens) {
+            bool skip=!captureMotion && (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || keyActivity || !motion);
+            introTime=skip ? 4 : std::min(4.0f,introTime+dt);
+            if(introTime<4 || skip) {
+                beginFrame(terminal);
+                DrawStudioIntro(w,h,introTime);
+                endFrame();
+                continue;
+            }
+            pageAge=0; introExit=0;
+        }
 #ifdef _WIN32
         if(job.valid() && job.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
             try { console=job.get(); }
             catch(const std::exception&) { console="The build workspace could not finish the request."; }
             outputScroll=0;
+            outputAge=0;
         }
 #endif
         int mastered=0, attempts=0, correct=0;
@@ -1215,6 +1320,7 @@ int main(int argc, char** argv) {
         int xp=mastered*100, level=xp/300+1;
         float fill=static_cast<float>(mastered)/lessons.size();
         displayed+= (fill-displayed)*(motion ? std::min(1.0f,dt*10) : 1.0f);
+        outputAge=motion ? outputAge+dt : 1;
         reward=std::max(0.0f,reward-dt);
         if(page==Visualize && playing) {
             timer+=dt*(speed==0 ? 0.5f : speed==1 ? 1.0f : 2.0f);
@@ -1240,49 +1346,46 @@ int main(int argc, char** argv) {
             quizProgress+=(target-quizProgress)*(motion ? std::min(1.0f,dt*12) : 1);
         }
 
-        BeginDrawing();
-        ClearBackground(bg);
-        BeginMode2D({{static_cast<float>(uiInset),0},{0,0},0,uiScale});
-        if(introTime<4 && !captureScreens) {
-            bool skip=IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || keyActivity || !motion;
-            introTime=skip ? 4 : std::min(4.0f,introTime+dt);
-            if(introTime<4) {
-                DrawStudioIntro(w,h,introTime);
-                EndMode2D();
-                EndDrawing();
-                continue;
-            }
-            EndMode2D();
-            EndDrawing();
-            continue;
-        }
+        beginFrame(bg);
         DrawRectangleRec({0,0,w,57},panel);
         DrawRectangleRec({0,56,w,1},seam);
-        StudioMark({x,13},29,violet);
+        StudioMark({x,13},29,primary);
         Text("CodePath Studio",x+41,17,20);
         const Page navOrder[]={Home,Learn,Visualize,Notebook,Assess,Progress};
         float tabW=std::min(144.0f,(width-236)/6), navX=x+width-tabW*6;
+        for(int i=0;i<6;++i) {
+            Rectangle tab{navX+i*tabW,8,tabW-4,41};
+            if(CheckCollisionPointRec(GetMousePosition(),tab) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                if(page!=navOrder[i]) playing=false;
+                page=navOrder[i];
+            }
+        }
+        if(page!=previousPage) pageAge=0;
+        pageAge=motion ? pageAge+dt : 1;
+        int selectedTab=static_cast<int>(std::find(std::begin(navOrder),std::end(navOrder),page)-std::begin(navOrder));
+        float selectionTarget=navX+selectedTab*tabW;
+        selectionX=selectionX==0 ? selectionTarget : Approach(selectionX,selectionTarget,16);
+        DrawRectangleRounded({selectionTarget,8,tabW-4,41},0.38f,10,
+                             Blend(panel,litSurface,0.45f+0.55f*Arrival(pageAge/0.22f)));
         for(int i=0;i<6;++i) {
             Page destination=navOrder[i];
             Rectangle item{navX+i*tabW,8,tabW-4,41};
             bool selected=page==destination;
             bool hovered=CheckCollisionPointRec(GetMousePosition(),item);
-            if(selected || hovered)
-                DrawRectangleRounded(item,0.38f,10,selected ? litSurface : hoverSurface);
-            NavIcon(destination,{item.x+16,item.y+20},selected ? violet : muted);
-            Text(nav[destination],item.x+32,item.y+11,16,selected ? violet : ink);
-            if(hovered && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                if(page!=destination) playing=false;
-                page=destination;
-            }
+            if(hovered && !selected)
+                DrawRectangleRounded(item,0.38f,10,Fade(hoverSurface,0.62f));
+            NavIcon(destination,{item.x+16,item.y+20},selected ? primary : muted);
+            Text(nav[destination],item.x+32,item.y+11,16,selected ? primary : ink);
         }
+        DrawRectangleRounded({selectionX+14,47,tabW-32,2},1,6,primary);
         float footerY=h-42;
         DrawRectangleRec({0,footerY,w,42},panel);
         DrawRectangleRec({0,footerY,w,1},seam);
         Text("LOCAL PROFILE",x,footerY+12,13,muted);
-        Text(TextFormat("LEVEL %d  /  %d XP",level,xp),x+121,footerY+11,15,violet);
+        Text(TextFormat("LEVEL %d  /  %d XP",level,xp),x+121,footerY+11,15,primary);
         Bar(x+251,footerY+18,101,displayed);
-        if(Button({w-x-347,footerY+5,96,32},introEnabled ? "Intro on" : "Intro off")) {
+        if(Button({w-x-347,footerY+5,96,32},introEnabled ? "Intro on" : "Intro off")
+           && !captureMotion && !captureScreens) {
             if(introEnabled) {
                 std::filesystem::create_directories(save.parent_path(),introError);
                 std::ofstream marker(introSetting);
@@ -1296,23 +1399,24 @@ int main(int argc, char** argv) {
         if(Button({w-x-135,footerY+5,135,32},IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) ? "Exit fullscreen" : "Fullscreen  F11"))
             fullscreenRequested=true;
         h=footerY;
-        Text(nav[page],x,66,32);
+        Text(nav[page],x,66+7*(1-Arrival(pageAge/0.26f)),32);
         if(!saved) Text("Progress could not be saved",x,h-25,15,errorColor);
 
+        const Page renderedPage=page;
         if(page==Home) {
             // The start page is a live demonstration, with the courses as the next stop.
             float heroY=112, heroH=h-162, heroW=width*0.67f;
-            DrawRectangleRounded({x,heroY,heroW,heroH},0.09f,12,violet);
+            DrawRectangleRounded({x,heroY,heroW,heroH},0.09f,12,hero);
             Text("Learn by changing",x+29,heroY+25,48,WHITE);
-            Text("the state.",x+29,heroY+77,48,lime);
-            Text("A live memory experiment",x+32,heroY+145,18,paperViolet);
+            Text("the state.",x+29,heroY+77,48,brass);
+            Text("A live memory experiment",x+32,heroY+145,18,draft);
             float boardY=heroY+187, boardH=heroH-297;
             PremiumLabs::DrawHomeMemory(memoryBoard,{x+23,boardY,heroW-46,boardH},motion);
             memoryBoard.Update(dt,motion);
-            Text("POINTER ADDRESS",x+28,heroY+heroH-92,13,paperViolet);
+            Text("POINTER ADDRESS",x+28,heroY+heroH-92,13,draft);
             Text(TextFormat("p = 0x%X",0x100+4*memoryBoard.target),x+28,heroY+heroH-70,25,WHITE,true);
-            Wrap("Select a memory cell, then write through the pointer.",x+29,heroY+heroH-36,heroW-50,15,paperViolet);
-            if(Button({x+heroW-322,heroY+heroH-90,153,40},memoryBoard.writing ? "Writing..." : "Execute ++*p",true,lime) && !memoryBoard.writing) {
+            Wrap("Select a memory cell, then write through the pointer.",x+29,heroY+heroH-36,heroW-50,15,draft);
+            if(Button({x+heroW-322,heroY+heroH-90,153,40},memoryBoard.writing ? "Writing..." : "Execute ++*p",true,brass) && !memoryBoard.writing) {
                 memoryBoard.pendingTarget=memoryBoard.target;
                 memoryBoard.travel=0;
                 memoryBoard.writing=true;
@@ -1397,6 +1501,9 @@ int main(int argc, char** argv) {
                 Button({bx+bw-268,236,118,32},lessonExplore ? "Code example" : "Explore",lessonExplore)) {
                 lessonExplore=!lessonExplore; lessonDetail=false;
             }
+            const int viewKey=current*3+(lessonExplore ? 2 : lessonDetail ? 1 : 0);
+            if(viewKey!=lessonKey) { lessonKey=viewKey; lessonAge=0; }
+            lessonAge=motion ? lessonAge+dt : 1;
             if(lessonExplore) {
                 LessonExplorer(current,exploreValue,exploreStep,exploreBound,{contentX,by,contentW,actions-by});
             } else if(lessonDetail && !details.empty()) {
@@ -1421,6 +1528,8 @@ int main(int argc, char** argv) {
                     Wrap(LessonNote(current),bx+26,bodyEnd+51,readingW-55,17);
                 }
             }
+            if(lessonAge<0.26f)
+                DrawRectangleRec({contentX,by,contentW,actions-by},Fade(panel,0.68f*(1-Arrival(lessonAge/0.26f))));
             if(Button({bx+15,actions,112,37},"Practice",true)) startQuiz({current});
             if(Button({bx+134,actions,127,37},"Edit example")) {
 #ifdef _WIN32
@@ -1467,7 +1576,7 @@ int main(int argc, char** argv) {
                 float leftW=width*0.55f, rightX=x+leftW+14, rightW=width-leftW-14;
                 Card({x,109,leftW,h-132},panel);
                 DrawRectangleGradientV(static_cast<int>(x+1),110,static_cast<int>(leftW-2),
-                                       static_cast<int>((h-132)*0.55f),paperViolet,panel);
+                                       static_cast<int>((h-132)*0.55f),draft,panel);
                 Text("Practice changes understanding.",x+25,146,32);
                 Wrap("Choose a lesson to check what you know, or take a mixed assessment across the curriculum.",
                      x+26,205,leftW-52,19);
@@ -1505,7 +1614,7 @@ int main(int argc, char** argv) {
             } else if(quiz.index>=quiz.questions.size()) {
                 Card({x,109,width,h-132},rail);
                 DrawRectangleGradientH(static_cast<int>(x+1),110,static_cast<int>(width-2),
-                                       static_cast<int>((h-132)*0.55f),paperViolet,panel);
+                                       static_cast<int>((h-132)*0.55f),draft,panel);
                 Text("Assessment complete",x+30,145,32);
                 MasteryRing({x+width*0.72f,329},static_cast<float>(quiz.correct)/quiz.questions.size());
                 Text(TextFormat("%d / %d",quiz.correct,static_cast<int>(quiz.questions.size())),x+35,239,51);
@@ -1531,7 +1640,12 @@ int main(int argc, char** argv) {
                 float questionW=width*0.51f;
                 float answerX=x+questionW+17, answerW=width-questionW-40;
                 DrawRectangleRec({answerX-12,181,1,h-297},seam);
-                float yy=Wrap(item.question,x+24,186,questionW-48,28,ink)+19;
+                int nextQuestionKey=id*100+static_cast<int>(quiz.index);
+                if(questionKey!=nextQuestionKey || previousPage!=Assess) {
+                    questionKey=nextQuestionKey; quizAge=0;
+                }
+                quizAge=motion ? quizAge+dt : 1;
+                float yy=Wrap(item.question,x+24,186+10*(1-Arrival(quizAge/0.30f)),questionW-48,28,ink)+19;
                 bool prediction=std::string(item.question)=="Predict the output.";
                 if(prediction ||
                    std::string(item.question).find("value of bytes")!=std::string::npos ||
@@ -1542,6 +1656,7 @@ int main(int argc, char** argv) {
                 auto record=[&](int choice) {
                     if(quiz.selected!=-1) return;
                     quiz.selected=choice;
+                    answerAge=0;
                     Score& score=scores[id];
                     if(score.attempts<1000000) ++score.attempts;
                     if(choice==0) {
@@ -1551,6 +1666,7 @@ int main(int argc, char** argv) {
                     } else quiz.mistakes.push_back(id);
                     saveNow();
                 };
+                if(captureMotion && demoElapsed>=20.0f && quiz.selected==-1) record(0);
                 if(prediction) {
                     if(quiz.selected==-1) {
                         for(int c=GetCharPressed();c>0;c=GetCharPressed())
@@ -1580,7 +1696,14 @@ int main(int argc, char** argv) {
                     if(Button({answerX,yy,91,43},"Hint",quiz.hint)) quiz.hint=!quiz.hint;
                     if(quiz.hint) Wrap(item.hint,answerX,yy+53,answerW,18);
                 } else {
-                    DrawRectangleRec({answerX-8,yy,3,54},quiz.selected==0 ? successColor : errorColor);
+                    if(lastAnswer!=quiz.selected) answerAge=0;
+                    lastAnswer=quiz.selected;
+                    answerAge=motion ? answerAge+dt : 1;
+                    const float feedback=Arrival(answerAge/0.52f);
+                    const Color resultTone=quiz.selected==0 ? successColor : errorColor;
+                    DrawRectangleRec({answerX-10,yy,4,54*feedback},resultTone);
+                    DrawRectangleRounded({answerX-5,yy-5,answerW+5,55},0.19f,8,
+                                          Fade(quiz.selected==0 ? successFill : errorFill,0.30f+0.58f*(1-feedback)));
                     yy=Wrap(quiz.selected==0 ? "Correct" : TextFormat("Incorrect. Correct answer: %s",item.answers[0]),
                             answerX,yy,answerW,20,
                             quiz.selected==0 ? successColor : errorColor);
@@ -1673,10 +1796,14 @@ int main(int argc, char** argv) {
             for(int i=0;i<outputRows && i+outputScroll<static_cast<int>(lines.size());++i) {
                 const auto& output=lines[i+outputScroll];
                 Color tone=output.find("FAIL")!=std::string::npos || output.find("error ")!=std::string::npos ? terminalError :
-                           output.find("PASS")!=std::string::npos || output=="Build succeeded" ? lime : paperViolet;
+                           output.find("PASS")!=std::string::npos || output=="Build succeeded" ? brass : draft;
                 Text(output.c_str(),outputBox.x+12,outputBox.y+10+i*20,16,tone,true);
             }
             EndScissorMode();
+            if(outputAge<0.55f && !running) {
+                const float sweep=Arrival(outputAge/0.55f);
+                DrawRectangleRec({outputBox.x+13,outputY+sweep*100,outputBox.width-26,2},Fade(brass,1-sweep));
+            }
             Text("Ctrl+A/C/X/V  Select/copy/cut/paste   Ctrl+Z/Y  Undo/redo   Shift+wheel  Scroll sideways",
                  x,h-37,16,muted);
             }
@@ -1691,16 +1818,16 @@ int main(int argc, char** argv) {
             // A single progress instrument anchors the page; tracks and awards follow.
             float top=115, featureW=width*0.29f, tracksX=x+featureW+22;
             float tracksW=width-featureW-22, upperH=h-top-193;
-            DrawRectangleRounded({x,top,featureW,upperH},0.12f,10,violet);
+            DrawRectangleRounded({x,top,featureW,upperH},0.12f,10,hero);
             Text("Your learning",x+23,top+25,26,WHITE);
-            Text(TextFormat("%d%%",static_cast<int>(displayed*100+0.5f)),x+21,top+86,72,lime,true);
-            DrawRectangleRec({x+24,top+178,featureW-48,7},paperViolet);
-            DrawRectangleRec({x+24,top+178,(featureW-48)*displayed,7},lime);
+            Text(TextFormat("%d%%",static_cast<int>(displayed*100+0.5f)),x+21,top+86,72,brass,true);
+            DrawRectangleRec({x+24,top+178,featureW-48,7},draft);
+            DrawRectangleRec({x+24,top+178,(featureW-48)*displayed,7},brass);
             Text(TextFormat("Level %d",level),x+24,top+220,29,WHITE);
-            Text(TextFormat("%d XP earned",xp),x+25,top+266,18,paperViolet);
+            Text(TextFormat("%d XP earned",xp),x+25,top+266,18,draft);
             Text(TextFormat("%d / %d lessons mastered",mastered,static_cast<int>(lessons.size())),x+25,top+324,17,WHITE);
             Text(attempts ? TextFormat("%d%% answer accuracy",static_cast<int>(100.0*correct/attempts)) :
-                            "No answers recorded yet",x+25,top+352,17,paperViolet);
+                            "No answers recorded yet",x+25,top+352,17,draft);
             Card({tracksX,top,tracksW,upperH},panel);
             Text("Curriculum tracks",tracksX+19,top+16,24);
             float row=(upperH-57)/3;
@@ -1737,8 +1864,13 @@ int main(int argc, char** argv) {
             float awardGap=12, awardW=(width-2*awardGap)/3;
             for(int i=0;i<3;++i) {
                 float left=x+i*(awardW+awardGap), y=awardsY+35;
-                DrawRectangleRec({left,y,awardW,2},unlocked[i] ? violet : seam);
-                DrawCircleV({left+23,y+26},7,unlocked[i] ? led : muted);
+                DrawRectangleRec({left,y,awardW,2},unlocked[i] ? primary : seam);
+                Vector2 badge{left+23,y+26};
+                if(motion && reward>0 && unlocked[i] && (i==0 ? mastered==1 : i==1 ? current==2 : mastered==static_cast<int>(lessons.size()))) {
+                    float halo=Arrival((2.4f-reward)/0.72f);
+                    DrawCircleLinesV(badge,8+12*halo,Fade(signalInk,1-halo));
+                }
+                DrawCircleV(badge,7,unlocked[i] ? led : muted);
                 Text(badges[i],left+40,y+14,19,unlocked[i] ? led : ink);
                 Wrap(goals[i],left+17,y+53,awardW-34,16,muted);
             }
@@ -1747,18 +1879,26 @@ int main(int argc, char** argv) {
                 if(scores[i].attempts>0 && scores[i].correct==0) weak.push_back(static_cast<int>(i));
             if(!weak.empty() && Button({x+width-198,awardsY-3,198,32},"Practice weak topics")) startQuiz(std::move(weak));
         }
-        if(captureScreens && captureIndex>=13) DrawStudioIntro(w,h+42,captureIndex==13 ? 2.75f : 1.15f);
         if(reward>0) {
-            float opacity=motion ? std::min(1.0f,reward*2.4f) : 1.0f;
-            Card({w-203,62,179,38},Fade(panel,opacity));
-            Text("+100 XP   /   MASTERY",w-190,73,15,Fade(led,opacity));
+            float lift=motion ? 1-Arrival((2.4f-reward)/0.42f) : 0;
+            float opacity=motion ? std::min(1.0f,reward*3.5f) : 1;
+            float toastX=w-214+26*lift;
+            DrawRectangleRounded({toastX,62,181,38},0.34f,10,Fade(hero,opacity));
+            DrawCircleV({toastX+17,81},5,Fade(brass,opacity));
+            Text("+100 XP   /   MASTERY",toastX+29,73,15,Fade(onDark,opacity));
         }
-        if(previousPage!=page) { previousPage=page; reveal=0; }
-        reveal=motion ? std::min(1.0f,reveal+dt*5) : 1;
-        if(reveal<1)
-            DrawRectangleRec({x,100,w-x,h-100},Fade(bg,0.28f*(1-reveal)*(1-reveal)));
-        EndMode2D();
-        EndDrawing();
+        previousPage=renderedPage;
+        if(pageAge<0.32f)
+            DrawRectangleRec({x,103,width,h-103},Fade(bg,0.63f*(1-Arrival(pageAge/0.32f))));
+        if(introExit<1) {
+            float curtain=w*(1-Arrival(introExit));
+            Clip(0,0,curtain,h+42);
+            DrawStudioIntro(w,h+42,4);
+            EndScissorMode();
+            DrawRectangleRec({curtain-2,0,2,h+42},brass);
+        }
+        if(captureScreens && captureIndex>=13) DrawStudioIntro(w,h+42,captureIndex==13 ? 2.75f : 1.15f);
+        endFrame();
         if(captureScreens && ++captureFrame>=18) {
             const char* names[]={"home","lessons","notebook","progress","assessments",
                                  "quiz","quiz-result","lab-pointer","lab-array","lab-heap",
@@ -1775,6 +1915,7 @@ int main(int argc, char** argv) {
             if(captureIndex==15) break;
         }
     }
+    if(captureMotion) UnloadRenderTexture(recording);
     if(ui.texture.id!=GetFontDefault().texture.id) UnloadFont(ui);
     if(mono.texture.id!=GetFontDefault().texture.id) UnloadFont(mono);
     if(heading.texture.id!=GetFontDefault().texture.id) UnloadFont(heading);
