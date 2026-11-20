@@ -1,8 +1,8 @@
 namespace PointerLab {
-constexpr Color deep{14,20,22,255}, surface{23,33,36,255};
-constexpr Color teal{47,93,98,255}, grey{123,143,138,255};
-constexpr Color apricot{242,164,111,255}, bright{255,178,125,255};
-constexpr Color secondary{174,180,176,255};
+constexpr Color deep{16,24,32,255}, surface{23,38,47,255};
+constexpr Color teal{51,82,96,255}, grey{139,161,167,255};
+constexpr Color apricot{255,181,122,255}, bright{255,181,122,255};
+constexpr Color secondary{184,196,197,255};
 constexpr const char* operations[]={"int a = 5, b = 8, c = 12;","int* p = &b;","int copy = *p;","++*p;","p = nullptr;"};
 constexpr const char* captions[]={
     "Initialize three independent integers. The displayed addresses are symbolic.",
@@ -20,20 +20,20 @@ constexpr State At(int step,float phase) {
 static_assert(At(3,0).b==8 && At(3,1).b==9 && At(4,0).copy==8 && !At(4,0).connected);
 
 void Glass(Rectangle r,Color rim,bool active=false) {
-    float radius=std::min(0.23f,22.0f/std::min(r.width,r.height));
-    DrawRectangleRounded({r.x+3,r.y+8,r.width,r.height},radius,12,Fade(BLACK,0.48f));
-    for(int i=3;i>=1;--i) {
-        if(active) DrawRectangleRoundedLinesEx({r.x-i*2,r.y-i*2,r.width+4*i,r.height+4*i},radius,12,2,Fade(rim,0.09f));
-    }
-    DrawRectangleRounded(r,radius,12,active ? Color{59,48,39,255} : surface);
-    DrawRectangleRoundedLinesEx(r,radius,12,active ? 1.8f : 1.2f,Fade(rim,active ? 0.95f : 0.72f));
-    DrawLineEx({r.x+14,r.y+3},{r.x+r.width-14,r.y+3},1.3f,Fade(ink,0.26f));
-    DrawLineEx({r.x+12,r.y+r.height-3},{r.x+r.width-12,r.y+r.height-3},1,Fade(rim,0.30f));
+    float radius=std::min(0.19f,15.0f/std::min(r.width,r.height));
+    DrawRectangleRounded({r.x+2,r.y+7,r.width,r.height},radius,12,Fade(BLACK,0.34f));
+    DrawRectangleRounded(r,radius,12,active ? Color{72,53,43,255} : surface);
+    DrawRectangleRoundedLinesEx(r,radius,12,active ? 1.8f : 1.1f,Fade(rim,active ? 0.96f : 0.55f));
+    DrawLineEx({r.x+14,r.y+2},{r.x+r.width-14,r.y+2},1.2f,Fade(ink,0.13f));
 }
 
 bool Control(Rectangle r,const char* label,bool selected=false,bool nav=false) {
     bool hover=CheckCollisionPointRec(GetMousePosition(),r);
-    Glass(r,selected ? bright : hover ? grey : teal,selected);
+    DrawRectangleRounded(r,0.18f,8,selected ? Color{69,52,45,255} :
+                         hover ? Color{43,66,76,255} : surface);
+    DrawRectangleRoundedLinesEx(r,0.18f,8,selected ? 1.6f : 0.8f,
+                                Fade(selected ? bright : teal,selected ? 0.9f : 0.58f));
+    if(selected) DrawLineEx({r.x+11,r.y+r.height-2},{r.x+r.width-11,r.y+r.height-2},2.2f,bright);
     float size=17;
     while(size>12 && MeasureTextEx(ui,label,size,0.5f).x>r.width-12) --size;
     float tw=MeasureTextEx(ui,label,size,0.5f).x;
@@ -49,12 +49,12 @@ bool Control(Rectangle r,const char* label,bool selected=false,bool nav=false) {
 }
 
 void Cell3D(Rectangle r,const char* address,const char* value,bool active,float glow) {
-    Color rim=active ? bright : Color{108,194,190,255};
+    Color rim=active ? bright : Color{131,219,214,255};
     float lift=r.width*0.11f;
     DrawCircleGradient(static_cast<int>(r.x+r.width/2),static_cast<int>(r.y+r.height+7),
                        r.width*1.15f,Fade(rim,0.20f+glow*0.33f),Fade(rim,0));
-    Color top=active ? Fade(apricot,0.74f) : teal;
-    Color side=active ? Color{107,67,43,255} : Color{38,76,79,255};
+    Color top=active ? Color{196,128,83,255} : Color{57,108,120,255};
+    Color side=active ? Color{112,69,48,255} : Color{34,71,82,255};
     DrawTriangle({r.x,r.y},{r.x+r.width+lift,r.y-lift},{r.x+lift,r.y-lift},top);
     DrawTriangle({r.x,r.y},{r.x+r.width,r.y},{r.x+r.width+lift,r.y-lift},top);
     DrawTriangle({r.x+r.width,r.y},{r.x+r.width+lift,r.y+r.height-lift},{r.x+r.width+lift,r.y-lift},side);

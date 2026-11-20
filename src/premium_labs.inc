@@ -29,7 +29,7 @@ void DrawArray(Rectangle stage,int step,float phase,const std::array<int,3>& val
     Rectangle space{stage.x+5,stage.y+91,stage.width-10,stage.height-171};
     Clip(space.x,space.y,space.width,space.height);
     Floor(space);
-    float cw=std::min(104.0f,(space.width-110)/4.0f), gap=std::min(28.0f,cw*0.25f);
+    float cw=std::min(140.0f,(space.width-110)/4.0f), gap=std::min(34.0f,cw*0.25f);
     float left=space.x+(space.width-(3*cw+2*gap))/2;
     float cy=space.y+space.height*0.45f;
     int current=std::max(0,step-1);
@@ -66,7 +66,7 @@ void DrawHeap(Rectangle stage,int step,float phase) {
     DrawLineEx({divider,space.y+18},{divider,space.y+space.height-14},1,Fade(grey,0.55f));
     Text("CALL STACK",space.x+25,space.y+19,14,codeType);
     Text("DYNAMIC STORAGE",divider+25,space.y+19,14,codeType);
-    float cw=std::min(120.0f,space.width*0.21f), cy=space.y+space.height*0.38f;
+    float cw=std::min(150.0f,space.width*0.21f), cy=space.y+space.height*0.38f;
     Rectangle pointer{space.x+space.width*0.14f,cy,cw,cw*0.72f};
     Rectangle heap{divider+space.width*0.18f,cy,cw,cw*0.72f};
     Block(pointer,"pointer p",step<2 ? "nullptr" : step==5 ? "nullptr" : "0x800",step>=2,1);
@@ -92,7 +92,7 @@ void DrawRecursion(Rectangle stage,int step,float phase) {
     Rectangle space{stage.x+5,stage.y+91,stage.width-10,stage.height-159};
     Clip(space.x,space.y,space.width,space.height); Floor(space);
     int active=step<=3 ? step+1 : std::max(0,7-step);
-    float stride=std::min(61.0f,(space.height-44)/4), fw=std::min(280.0f,space.width*0.57f);
+    float stride=std::min(68.0f,(space.height-44)/4), fw=std::min(380.0f,space.width*0.57f);
     for(int i=0;i<active;++i) {
         bool newest=step<4 && i==active-1;
         Rectangle frame{space.x+34+i*17,space.y+25+i*stride+(newest ? (1-Ease(phase))*34 : 0),
@@ -117,7 +117,7 @@ void DrawLinked(Rectangle stage,int step,float phase) {
     Caption(stage,"Linked insertion","Link the new node to 30 before redirecting 10. The suffix remains reachable.");
     Rectangle space{stage.x+5,stage.y+91,stage.width-10,stage.height-159};
     Clip(space.x,space.y,space.width,space.height); Floor(space);
-    float cw=std::min(115.0f,space.width*0.18f);
+    float cw=std::min(145.0f,space.width*0.21f);
     float x0=space.x+space.width*0.12f,x1=space.x+space.width*0.43f,x2=space.x+space.width*0.73f;
     float y=space.y+space.height*0.32f;
     float newY=y+(step>=3 ? (1-Ease(phase))*space.height*0.27f : space.height*0.27f);
@@ -139,7 +139,7 @@ void DrawBubble(Rectangle stage,const std::vector<SortFrame>& trace,int step,flo
     Rectangle space{stage.x+5,stage.y+91,stage.width-10,stage.height-159};
     Clip(space.x,space.y,space.width,space.height); Floor(space);
     const auto& frame=trace[step];
-    float cw=std::min(110.0f,space.width*0.2f), gap=std::min(36.0f,cw*0.3f);
+    float cw=std::min(145.0f,space.width*0.2f), gap=std::min(40.0f,cw*0.3f);
     float left=space.x+(space.width-3*cw-2*gap)/2, y=space.y+space.height*0.42f;
     int sortedFrom=3;
     for(int i=1;i<=step;++i) if(trace[i].left==1) sortedFrom=2;

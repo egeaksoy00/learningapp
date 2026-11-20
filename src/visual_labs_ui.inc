@@ -5,18 +5,36 @@
                 observedLab=lab; observedStep=step;
                 playing=false; timer=0; phasePaused=settle; labMotion=settle ? 1.0f : 0.0f;
             };
-            Text("Explore C/C++ concepts through live, animated simulations.",x,91,17,P::secondary);
-            float tab=(width-40)/6;
-            for(int i=0;i<6;++i)
-                if(P::Control({x+i*(tab+8),126,tab,43},visualLabs[i].name,i==lab) && i!=lab) {
+            Scene scene=FindScene(lab);
+            auto operation=[&](int i) -> std::string {
+                if(lab==0) return P::operations[i];
+                if(lab==1 && i==0) return TextFormat("int a[] = {%d,%d,%d};",arrayInputs[arrayInput][0],
+                                                    arrayInputs[arrayInput][1],arrayInputs[arrayInput][2]);
+                if(scene.count) return scene.frames[i].operation;
+                if(lab==5) return SortStep(sortTrace,i);
+                return visualLabs[lab].steps[i];
+            };
+            auto caption=[&](int i) -> std::string {
+                if(lab==0) return P::captions[i];
+                if(scene.count) return scene.frames[i].caption;
+                if(lab==5) return SortStep(sortTrace,i);
+                return LabCaption(lab,i);
+            };
+            float railW=149, workX=x+railW+14, workW=width-railW-14;
+            Text("Experiments",x,107,20);
+            Text("Step through a program",x,132,14,P::secondary);
+            for(int i=0;i<6;++i) {
+                float yy=163+i*56.0f;
+                if(P::Control({x,yy,railW,48},visualLabs[i].name,i==lab) && i!=lab) {
                     lab=i; count=labCount(); step=0; timer=0; playing=false;
                     labMotion=0; phasePaused=false; observedLab=lab; observedStep=step;
+                    scene=FindScene(lab);
                 }
-            float consoleY=h-126;
-            float inspector=std::clamp(width*0.32f,280.0f,365.0f);
-            Rectangle stage{x,187,width-inspector-16,consoleY-204};
-            Rectangle code{stage.x+stage.width+16,stage.y,inspector,stage.height};
+            }
+            Text("ACTIVE MODEL",x,522,13,P::apricot);
+            Wrap("Choose a model, then use the transport controls to inspect each state.",x,547,railW,15);
             float phase=motion ? labMotion : 1.0f;
+            Rectangle stage{workX,108,workW,h-291};
             if(lab==0) P::Stage(stage,step,phase,motion);
             else if(lab==1) PremiumLabs::DrawArray(stage,step,phase,arrayInputs[arrayInput]);
             else if(lab==2) PremiumLabs::DrawHeap(stage,step,phase);
@@ -33,102 +51,55 @@
                     count=labCount(); seek(0,false);
                 }
             }
-            Scene scene=FindScene(lab);
-            auto operation=[&](int i) -> std::string {
-                if(lab==0) return P::operations[i];
-                if(lab==1 && i==0) return TextFormat("int a[] = {%d,%d,%d};",arrayInputs[arrayInput][0],
-                                                    arrayInputs[arrayInput][1],arrayInputs[arrayInput][2]);
-                if(scene.count) return scene.frames[i].operation;
-                if(lab==5) return SortStep(sortTrace,i);
-                return visualLabs[lab].steps[i];
-            };
-            auto caption=[&](int i) -> std::string {
-                if(lab==0) return P::captions[i];
-                if(scene.count) return scene.frames[i].caption;
-                if(lab==5) return SortStep(sortTrace,i);
-                return LabCaption(lab,i);
-            };
-            P::Glass(code,P::teal);
-            float switchWidth=(code.width-36)/2;
-            if(P::Control({code.x+14,code.y+14,switchWidth,34},"Code",!pointerTrace)) pointerTrace=false;
-            if(P::Control({code.x+22+switchWidth,code.y+14,switchWidth,34},"Trace",pointerTrace)) pointerTrace=true;
+            Rectangle dock{workX,stage.y+stage.height+11,workW,94};
+            P::Glass(dock,P::teal);
+            float stateX=dock.x+dock.width*0.68f;
+            DrawLineEx({stateX,dock.y+12},{stateX,dock.y+dock.height-12},1,P::teal);
+            if(P::Control({dock.x+12,dock.y+10,67,30},"Code",!pointerTrace)) pointerTrace=false;
+            if(P::Control({dock.x+85,dock.y+10,67,30},"Trace",pointerTrace)) pointerTrace=true;
+            Text(TextFormat("%02d / %02d",step+1,count),dock.x+166,dock.y+16,16,P::apricot,true);
             if(pointerTrace) {
-                Text("CURRENT OPERATION",code.x+17,code.y+67,14,P::apricot);
-                CodeLine(operation(step),code.x+17,code.y+91,17);
-                std::string detail=caption(step);
-                Wrap(detail.c_str(),code.x+17,code.y+129,code.width-34,17,P::secondary);
+                Wrap(caption(step).c_str(),dock.x+14,dock.y+48,stateX-dock.x-29,15,P::secondary);
             } else {
-                float rowHeight=std::min(30.0f,(code.height-186)/count);
-                for(int i=0;i<count;++i) {
-                    Rectangle line{code.x+12,code.y+59+i*rowHeight,code.width-24,rowHeight-3};
-                    if(i==step) P::Glass(line,P::apricot,true);
-                    Text(TextFormat("%02d",i+1),line.x+8,line.y+5,13,i==step ? P::apricot : P::grey,true);
-                    Clip(line.x+34,line.y,line.width-37,line.height);
-                    std::string op=operation(i);
-                    float codeSize=15;
-                    while(codeSize>11 && MeasureTextEx(mono,op.c_str(),codeSize,0.5f).x>line.width-39) --codeSize;
-                    CodeLine(op,line.x+35,line.y+(line.height-codeSize)/2,codeSize);
-                    EndScissorMode();
-                    if(CheckCollisionPointRec(GetMousePosition(),line) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-                        seek(i,true);
-                }
+                Clip(dock.x+14,dock.y+45,stateX-dock.x-28,36);
+                CodeLine(operation(step),dock.x+15,dock.y+48,19);
+                EndScissorMode();
             }
-            Rectangle variables{code.x+14,code.y+code.height-124,code.width-28,109};
-            P::Glass(variables,P::teal);
+            Text("LIVE STATE",stateX+12,dock.y+11,13,P::apricot);
+            std::string state1,state2;
             if(lab==0) {
                 auto state=P::At(step,phase);
-                Text("Variables / current state",variables.x+12,variables.y+9,16);
-                Text(TextFormat("a = 5   b = %d   c = 12",state.b),variables.x+12,variables.y+39,15,ink,true);
-                Text(TextFormat("p = %s",state.connected ? "0x104" : state.pointerExists ? "nullptr" : "--"),
-                     variables.x+12,variables.y+61,15,ink,true);
-                Text(state.copy<0 ? "copy = --" : "copy = 8",variables.x+12,variables.y+83,15,ink,true);
+                state1=TextFormat("a=5   b=%d   c=12",state.b);
+                state2=TextFormat("p=%s   copy=%s",state.connected ? "0x104" : state.pointerExists ? "null" : "--",
+                                  state.copy<0 ? "--" : "8");
+            } else if(lab==1) {
+                int visited=step==0 ? 0 : step-(phase<0.72f ? 1 : 0);
+                int total=std::accumulate(arrayInputs[arrayInput].begin(),arrayInputs[arrayInput].begin()+visited,0);
+                state1=TextFormat("index = %d",std::max(0,step-1));
+                state2=TextFormat("total = %d / visited %d",total,visited);
+            } else if(lab==2) {
+                state1=step<2 ? "p = nullptr" : step==5 ? "p = nullptr" : step==4 ? "p = dangling" : "p = 0x800";
+                state2=step<2 ? "heap = none" : step<4 ? "heap = allocated" : "heap = released";
+            } else if(lab==3) {
+                int active=step<=3 ? step+1 : std::max(0,7-step);
+                const int returns[]={1,2,6,24};
+                state1=TextFormat("active frames = %d",active);
+                state2=step>=4 ? TextFormat("return = %d",returns[step-4]) : "return = pending";
+            } else if(lab==4) {
+                state1=step==3 && phase>=0.8f ? "10 -> 20 -> 30" : "10 -> 30";
+                state2=step>=2 ? "20.next -> 30" : "20.next = unset";
             } else {
-                Text("LIVE STATE",variables.x+12,variables.y+9,14,P::apricot);
-                std::string state1,state2,state3;
-                if(lab==1) {
-                    int visited=step==0 ? 0 : step-(phase<0.72f ? 1 : 0);
-                    int total=std::accumulate(arrayInputs[arrayInput].begin(),
-                                              arrayInputs[arrayInput].begin()+visited,0);
-                    state1=TextFormat("index = %d",std::max(0,step-1));
-                    state2=TextFormat("total = %d",total);
-                    state3=TextFormat("visited = %d of 3",visited);
-                } else if(lab==2) {
-                    state1=step<2 ? "p = nullptr" : step==5 ? "p = nullptr" :
-                           step==4 ? "p = dangling" : "p = 0x800";
-                    state2=step<2 ? "heap = none" : step<4 ? "heap = allocated" : "heap = released";
-                    state3=step==3 ? "*p = 42" : step>=4 ? "access = invalid" : "value = unset";
-                } else if(lab==3) {
-                    int active=step<=3 ? step+1 : std::max(0,7-step);
-                    const int returns[]={1,2,6,24};
-                    state1=TextFormat("active frames = %d",active);
-                    state2=step>=4 ? TextFormat("return value = %d",returns[step-4]) : "return = pending";
-                    state3=step==7 ? "factorial(4) = 24" : "calls retain local n";
-                } else if(lab==4) {
-                    state1=step==3 && phase>=0.8f ? "10.next -> 20" : "10.next -> 30";
-                    state2=step>=2 ? "20.next -> 30" : "20.next = unset";
-                    state3=step==3 && phase>=0.8f ? "10 -> 20 -> 30" : "10 -> 30";
-                } else {
-                    auto values=sortTrace[step].values;
-                    if(sortTrace[step].swapped && phase<0.8f) values=sortTrace[step-1].values;
-                    state1=TextFormat("a = [%d, %d, %d]",values[0],values[1],values[2]);
-                    state2=sortTrace[step].left<0 ? "comparison = none" :
-                           TextFormat("compare [%d] and [%d]",sortTrace[step].left,sortTrace[step].left+1);
-                    state3=sortTrace[step].swapped ? "event = swap" : "event = inspect";
-                }
-                Text(state1.c_str(),variables.x+12,variables.y+39,14,ink,true);
-                Text(state2.c_str(),variables.x+12,variables.y+61,14,ink,true);
-                Text(state3.c_str(),variables.x+12,variables.y+83,14,P::secondary,true);
+                auto values=sortTrace[step].values;
+                if(sortTrace[step].swapped && phase<0.8f) values=sortTrace[step-1].values;
+                state1=TextFormat("[%d, %d, %d]",values[0],values[1],values[2]);
+                state2=sortTrace[step].swapped ? "event = swap" : "event = inspect";
             }
-            P::Glass({x,consoleY,width,101},P::teal);
-            float controls=x+width-346;
-            std::string op=operation(step),detail=caption(step);
-            Text(TextFormat("Step %02d / %02d",step+1,count),x+17,consoleY+12,18,P::apricot);
-            Text(op.c_str(),x+150,consoleY+13,16,ink,true);
-            Wrap(detail.c_str(),x+17,consoleY+45,controls-x-27,16,P::secondary);
-            float y=consoleY+14;
-            if(P::Control({controls,y,62,37},"Restart")) seek(0,false);
-            if(P::Control({controls+68,y,51,37},"Prev")) seek(step-1,true);
-            if(P::Control({controls+125,y,67,37},playing ? "Pause" : "Play",true)) {
+            Text(state1.c_str(),stateX+12,dock.y+41,15,ink,true);
+            Text(state2.c_str(),stateX+12,dock.y+64,14,P::secondary,true);
+            float footY=h-69;
+            if(P::Control({workX,footY,66,37},"Restart")) seek(0,false);
+            if(P::Control({workX+73,footY,49,37},"Prev")) seek(step-1,true);
+            if(P::Control({workX+129,footY,64,37},playing ? "Pause" : "Play",true)) {
                 if(playing) { playing=false; phasePaused=true; }
                 else {
                     if(step==count-1) seek(0,false);
@@ -136,15 +107,14 @@
                     timer=labMotion*2.2f;
                 }
             }
-            if(P::Control({controls+198,y,51,37},"Next")) seek(step+1,false);
+            if(P::Control({workX+200,footY,49,37},"Next")) seek(step+1,false);
             const char* rates[]={"0.5x","1x","2x"};
-            if(P::Control({controls+255,y,63,37},rates[speed])) speed=(speed+1)%3;
-            Rectangle timeline{controls,consoleY+57,318,33};
-            float tx=timeline.x+9, span=timeline.width-18;
-            DrawLineEx({tx,timeline.y+16},{tx+span,timeline.y+16},2,P::teal);
-            float timelineProgress=(step+phase)/(count-1+1.0f);
-            DrawLineEx({tx,timeline.y+16},{tx+span*timelineProgress,timeline.y+16},2,P::apricot);
+            if(P::Control({workX+256,footY,55,37},rates[speed])) speed=(speed+1)%3;
+            Rectangle timeline{workX+326,footY,workW-326,37};
+            float tx=timeline.x+8, span=timeline.width-16;
+            DrawLineEx({tx,timeline.y+18},{tx+span,timeline.y+18},2,P::teal);
+            DrawLineEx({tx,timeline.y+18},{tx+span*(step+phase)/count,timeline.y+18},2,P::apricot);
             for(int i=0;i<count;++i)
-                DrawCircleV({tx+span*i/(count-1),timeline.y+16},i==step ? 6.0f : 4.0f,i<=step ? P::bright : P::grey);
+                DrawCircleV({tx+span*i/(count-1),timeline.y+18},i==step ? 6.0f : 4.0f,i<=step ? P::bright : P::grey);
             if(CheckCollisionPointRec(GetMousePosition(),timeline) && IsMouseButtonDown(MOUSE_BUTTON_LEFT))
                 seek(static_cast<int>(std::round((GetMousePosition().x-tx)*(count-1)/span)),true);
