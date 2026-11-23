@@ -1179,6 +1179,16 @@ int main(int argc, char** argv) {
         editor.scroll=0;
         editor.horizontal=0;
     };
+    auto loadHelloSample=[&] {
+        loadCode(cppMode ? "#include <iostream>\n\nint main() {\n    std::cout << \"Hello, C++!\\n\";\n}"
+                         : "#include <stdio.h>\n\nint main(void) {\n    puts(\"Hello, C!\");\n}");
+        challenge=-1;
+    };
+    auto runNotebook=[&] {
+        console="Compiling...";
+        outputScroll=0;
+        job=std::async(std::launch::async,CompileAndRun,editor.code,cppMode,challenge);
+    };
     auto selectChallenge=[&](int id) {
         challenge=id;
         cppMode=challenges[id].cpp;
@@ -1250,15 +1260,22 @@ int main(int argc, char** argv) {
     while(!WindowShouldClose()) {
         if(captureMotion) {
             demoElapsed=static_cast<float>(GetTime()-recordingStart);
-            const float sceneEnds[]={5.0f,6.2f,7.5f,12.8f,15.8f,19.5f,22.6f,25.8f,31.7f,36.0f};
+            const float sceneEnds[]={5.0f,6.2f,15.0f,22.0f,25.0f,28.7f,31.8f,35.0f,40.9f,45.2f};
             const int scene=static_cast<int>(std::upper_bound(std::begin(sceneEnds),std::end(sceneEnds),demoElapsed)
                                              -std::begin(sceneEnds));
             if(scene!=demoScene) {
                 demoScene=scene;
                 if(scene==1) page=Learn;
-                if(scene==2) page=Notebook;
+                if(scene==2) {
+                    page=Notebook;
+#ifdef _WIN32
+                    cppMode=false;
+                    loadHelloSample();
+                    runNotebook();
+#endif
+                }
                 if(scene>=3 && scene<=8) {
-                    const int firstSteps[]={2,1,2,3,1,0};
+                    const int firstSteps[]={1,1,2,3,1,0};
                     page=Visualize;
                     lab=scene-3;
                     step=firstSteps[lab];
@@ -1300,10 +1317,11 @@ int main(int argc, char** argv) {
         introExit=motion ? std::min(1.0f,introExit+dt/0.78f) : 1.0f;
         if(introTime<4 && !captureScreens) {
             bool skip=!captureMotion && (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || keyActivity || !motion);
-            introTime=skip ? 4 : std::min(4.0f,introTime+dt);
+            const float visibleIntro=std::min(4.0f,introTime+dt);
+            introTime=skip ? 4 : visibleIntro;
             if(introTime<4 || skip) {
                 beginFrame(terminal);
-                DrawStudioIntro(w,h,introTime);
+                DrawStudioIntro(w,h,visibleIntro);
                 endFrame();
                 continue;
             }
@@ -1327,9 +1345,8 @@ int main(int argc, char** argv) {
         if(page==Visualize && playing) {
             timer+=dt*(speed==0 ? 0.5f : speed==1 ? 1.0f : 2.0f);
             if(timer>=2.2f) {
-                timer=0;
-                if(step+1<labCount()) ++step;
-                else { playing=false; labMotion=1; }
+                if(step+1<labCount()) { ++step; timer=std::min(timer-2.2f,2.2f); }
+                else { playing=false; timer=0; labMotion=1; }
             }
         }
         if(observedLab!=lab || observedStep!=step) {
@@ -1673,7 +1690,7 @@ int main(int argc, char** argv) {
                     } else quiz.mistakes.push_back(id);
                     saveNow();
                 };
-                if(captureMotion && demoElapsed>=33.0f && quiz.selected==-1) record(0);
+                if(captureMotion && demoElapsed>=42.0f && quiz.selected==-1) record(0);
                 if(prediction) {
                     if(quiz.selected==-1) {
                         for(int c=GetCharPressed();c>0;c=GetCharPressed())
@@ -1732,11 +1749,7 @@ int main(int argc, char** argv) {
             Text("C / C++ SYNTAX NOTEBOOK",x,108,14,led);
 #ifdef _WIN32
             if(Button({x,135,91,35},cppMode ? "C++17" : "C17",true)) cppMode=!cppMode;
-            if(Button({x+99,135,126,35},"Hello sample")) {
-                loadCode(cppMode ? "#include <iostream>\n\nint main() {\n    std::cout << \"Hello, C++!\\n\";\n}"
-                                 : "#include <stdio.h>\n\nint main(void) {\n    puts(\"Hello, C!\");\n}");
-                challenge=-1;
-            }
+            if(Button({x+99,135,126,35},"Hello sample")) loadHelloSample();
             if(Button({x+233,135,137,35},"Challenges",challengePicker)) challengePicker=!challengePicker;
             if(challengePicker) {
                 Text("Choose a challenge",x,191,30);
@@ -1752,9 +1765,7 @@ int main(int argc, char** argv) {
             } else {
             bool running=job.valid();
             if(Button({x+378,135,181,35},running ? "Working..." : challenge>=0 ? "Run four tests" : "Build and run",!running) && !running) {
-                console="Compiling...";
-                outputScroll=0;
-                job=std::async(std::launch::async,CompileAndRun,editor.code,cppMode,challenge);
+                runNotebook();
             }
             if(challenge>=0) {
                 Wrap(challenges[challenge].instruction,x,180,width,17);

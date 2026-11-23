@@ -50,7 +50,7 @@ void DrawArray(Rectangle stage,int step,float phase,const std::array<int,3>& val
     Text(TextFormat("total = %d",total),totalPanel.x+24,totalPanel.y+12,21,ink,true);
     if(step>0 && phase<0.9f)
         Connection({marker+cw/2,cy-5},{totalPanel.x+totalPanel.width*0.7f,totalPanel.y+totalPanel.height},
-                   1,Ease(phase/0.78f),true,-14);
+                   1,Ease(phase/0.72f),true,-14);
     EndScissorMode();
     Text("INPUT PRESETS  /  THREE INTEGER VALUES",stage.x+23,stage.y+stage.height-40,14,secondary);
 }
@@ -134,12 +134,17 @@ void DrawLinked(Rectangle stage,int step,float phase) {
     float cw=std::min(145.0f,space.width*0.21f);
     float x0=space.x+space.width*0.12f,x1=space.x+space.width*0.43f,x2=space.x+space.width*0.73f;
     float y=space.y+space.height*0.29f, nodeH=space.height*0.34f;
-    float newY=y+(step>=3 ? (1-Ease(phase))*space.height*0.27f : space.height*0.27f);
-    if(step<3 || phase<0.45f)
-        Connection({x0+cw,y+nodeH*0.5f},{x2,y+nodeH*0.5f},step==3 ? 1-Ease(phase/0.45f) : 1,1,false,-32);
-    if(step>=2) Connection({x1+cw,newY+nodeH*0.5f},{x2,y+nodeH*0.5f},
-                           step==2 ? Arrival(phase/0.8f) : 1,phase,step==2 && phase<1);
-    if(step>=3) Connection({x0+cw,y+nodeH*0.5f},{x1,newY+nodeH*0.5f},Ease(phase),1,false);
+    const float newY=y+(step==3 ? (1-Ease(phase/0.8f))*space.height*0.27f :
+                         space.height*0.27f+(step==1 ? 13*(1-Arrival(phase/0.55f)) : 0));
+    const bool redirected=step==3 && phase>=0.8f;
+    const Vector2 headPort{x0+cw,y+nodeH*0.5f}, tailPort{x2,y+nodeH*0.5f};
+    const Vector2 newIn{x1,newY+nodeH*0.5f}, newOut{x1+cw,newY+nodeH*0.5f};
+    if(!redirected) Connection(headPort,tailPort,1,1,false,-32);
+    if(step>=2) {
+        const float transfer=std::clamp((phase-0.25f)/0.55f,0.0f,1.0f);
+        Connection(newOut,tailPort,1,transfer,step==2 && phase>=0.25f && phase<0.8f);
+    }
+    if(redirected) Connection(headPort,newIn,1,1,false);
     auto node=[&](float x,float top,const char* label,const char* value,bool selected) {
         Text(label,x,top-23,15,ink,true);
         Rectangle box{x,top,cw,nodeH};
@@ -149,12 +154,12 @@ void DrawLinked(Rectangle stage,int step,float phase) {
         Text(value,x+15,top+nodeH/2-14,28,ink,true);
         DrawCircleV({x+cw*0.81f,top+nodeH/2},5,primary);
     };
-    node(x0,y,"head","10",step==3);
+    node(x0,y,"head","10",redirected);
     node(x2,y,"tail","30",false);
-    if(step>=1) node(x1,newY+(step==1 ? 13*(1-Arrival(phase/0.55f)) : 0),"new node","20",true);
+    if(step>=1) node(x1,newY,"new node","20",true);
     Text("nullptr",x2+cw*0.08f,y+nodeH+9,15,secondary,true);
     EndScissorMode();
-    Text(step==3 && phase>=0.8f ? "10 -> 20 -> 30 -> nullptr" : "10 -> 30 -> nullptr",stage.x+23,
+    Text(redirected ? "10 -> 20 -> 30 -> nullptr" : "10 -> 30 -> nullptr",stage.x+23,
          stage.y+stage.height-42,16,ink,true);
 }
 void DrawBubble(Rectangle stage,const std::vector<SortFrame>& trace,int step,float phase) {
@@ -173,7 +178,7 @@ void DrawBubble(Rectangle stage,const std::vector<SortFrame>& trace,int step,flo
     for(int i=0;i<3;++i) {
         bool selected=frame.left>=0 && (i==frame.left || i==frame.left+1);
         int from=frame.swapped && selected ? 2*frame.left+1-i : i;
-        float travel=Ease(std::clamp((phase-0.18f)/0.60f,0.0f,1.0f));
+        float travel=Ease(std::clamp((phase-0.18f)/0.62f,0.0f,1.0f));
         float pos=from+(i-from)*travel;
         float lift=frame.swapped && selected ? std::sin(travel*PI)*(i==frame.left ? 55.0f : -24.0f) : 0;
         float fraction=static_cast<float>(frame.values[i]-low)/std::max(1,high-low);
@@ -205,19 +210,20 @@ void DrawHomeMemory(MemoryBoard& board,Rectangle stage,bool motion) {
     Rectangle cells[3];
     for(int i=0;i<3;++i) cells[i]={space.x+space.width*(0.47f+i*0.16f),
                                     space.y+space.height*(i==1 ? 0.52f : 0.30f),cw,cw*0.77f};
-    Block(pointer,"pointer p",TextFormat("0x%X",0x100+4*board.target),true);
-    for(int i=0;i<3;++i) {
-        Block(cells[i],TextFormat("0x%X",0x100+4*i),TextFormat("%d",board.values[i]),
-              i==board.target,1);
-        Rectangle hit{cells[i].x-4,cells[i].y-14,cells[i].width+12,cells[i].height+20};
-        if(CheckCollisionPointRec(GetMousePosition(),hit) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !board.writing)
-            board.target=i;
+    if(!board.writing && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        for(int i=0;i<3;++i) {
+            Rectangle hit{cells[i].x-4,cells[i].y-14,cells[i].width+12,cells[i].height+20};
+            if(CheckCollisionPointRec(GetMousePosition(),hit)) board.target=i;
+        }
     }
+    Block(pointer,"pointer p",TextFormat("0x%X",0x100+4*board.target),true);
+    for(int i=0;i<3;++i)
+        Block(cells[i],TextFormat("0x%X",0x100+4*i),TextFormat("%d",board.values[i]),i==board.target,1);
     const Rectangle target= cells[board.target];
-    Vector2 from{pointer.x+pointer.width*0.76f,pointer.y+pointer.height};
-    Vector2 to{target.x+target.width*0.53f,target.y+target.height};
+    Vector2 from=BottomPort(pointer,0.76f);
+    Vector2 to=BottomPort(target,0.53f);
     const float lane=std::max(cells[1].y+cells[1].height,from.y)+16;
-    MemoryLink(from,to,lane,1,board.travel,board.writing && motion);
+    MemoryLink(from,to,lane,1,board.travel,board.writing && motion ? 1.0f : 0.0f);
     EndScissorMode();
     Text("SELECT A MEMORY OBJECT TO REDIRECT p",stage.x+15,stage.y+stage.height-26,13,secondary);
 }

@@ -112,7 +112,7 @@
             Rectangle timeline{workX+436,footY,workW-436,37};
             float tx=timeline.x+8, span=timeline.width-16;
             DrawLineEx({tx,timeline.y+18},{tx+span,timeline.y+18},2,P::teal);
-            DrawLineEx({tx,timeline.y+18},{tx+span*(step+phase)/count,timeline.y+18},2,P::apricot);
+            DrawLineEx({tx,timeline.y+18},{tx+span*std::min(1.0f,(step+phase)/(count-1)),timeline.y+18},2,P::apricot);
             for(int i=0;i<count;++i)
                 DrawCircleV({tx+span*i/(count-1),timeline.y+18},i==step ? 6.0f : 4.0f,i<=step ? P::bright : P::grey);
             if(CheckCollisionPointRec(GetMousePosition(),timeline) && IsMouseButtonDown(MOUSE_BUTTON_LEFT))
