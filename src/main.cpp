@@ -187,10 +187,10 @@ bool Button(Rectangle r, const char* s, bool active = false, Color tint = led) {
     if(hover && !same) { hoveredRect=r; hoverStart=now; pressStart=-10; same=true; }
     if(hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) pressStart=now;
     float hoverAmount=hover ? (animateUi ? Arrival((now-hoverStart)/0.18f) : 1.0f) : 0;
-    float press=animateUi && same ? std::max(0.0f,1-(now-pressStart)/0.16f) : 0;
+    float press=animateUi && same ? 1-Arrival((now-pressStart)/0.26f) : 0;
     Color base=active ? (tint.r==errorColor.r ? errorFill : tint.r==successColor.r ? successFill : tint) : panel;
-    Color fill=Blend(base,active ? ink : hoverSurface,hoverAmount*(active ? 0.12f : 1.0f));
-    fill=Blend(fill,ink,press*0.14f);
+    Color fill=Blend(base,active ? (base.r>=128 ? WHITE : primary) : hoverSurface,hoverAmount*(active ? 0.12f : 1.0f));
+    fill=Blend(fill,base.r>=128 ? onAccent : primary,press*0.16f);
     bool inverse=active && tint.r==led.r && tint.g==led.g;
     const Rectangle hit=r;
     r={r.x+press*1.5f,r.y+press*1.7f,r.width-press*3,r.height-press*3};
@@ -200,45 +200,45 @@ bool Button(Rectangle r, const char* s, bool active = false, Color tint = led) {
     while(size>13 && MeasureTextEx(ui,s,size,0.5f).x>r.width-18) --size;
     const float labelWidth=MeasureTextEx(ui,s,size,0.5f).x;
     Clip(r.x,r.y,r.width,r.height);
-    Text(s,r.x+(r.width-labelWidth)/2,r.y+(r.height-size)/2,size,inverse ? WHITE : ink);
+    Text(s,r.x+(r.width-labelWidth)/2,r.y+(r.height-size)/2,size,inverse || (active && tint.r==signal.r) ? onAccent : ink);
     EndScissorMode();
     return CheckCollisionPointRec(GetMousePosition(),hit) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 void StudioMark(Vector2 p,float size,Color base) {
     DrawRectangleRounded({p.x,p.y,size,size},0.30f,10,base);
     float unit=size/7;
-    DrawLineEx({p.x+2*unit,p.y+2*unit},{p.x+3*unit,p.y+3.5f*unit},unit*0.49f,brass);
-    DrawLineEx({p.x+3*unit,p.y+3.5f*unit},{p.x+2*unit,p.y+5*unit},unit*0.49f,brass);
-    DrawLineEx({p.x+4*unit,p.y+5*unit},{p.x+5.4f*unit,p.y+5*unit},unit*0.49f,brass);
+    DrawLineEx({p.x+2*unit,p.y+2*unit},{p.x+3*unit,p.y+3.5f*unit},unit*0.49f,signal);
+    DrawLineEx({p.x+3*unit,p.y+3.5f*unit},{p.x+2*unit,p.y+5*unit},unit*0.49f,signal);
+    DrawLineEx({p.x+4*unit,p.y+5*unit},{p.x+5.4f*unit,p.y+5*unit},unit*0.49f,signal);
 }
 
 void DrawStudioIntro(float w,float h,float time) {
     DrawRectangleRec({0,0,w,h},terminal);
     const float cell=std::clamp(w/10,80.0f,137.0f), stride=cell+22;
     const float left=(w-5*stride+22)/2, row=h*0.50f;
-    const float trace=std::clamp((time-0.78f)/1.36f,0.0f,1.0f);
-    const float signal=left+cell/2+4*stride*trace;
+    const float trace=std::clamp((time-0.60f)/1.68f,0.0f,1.0f);
+    const float signalX=left+cell/2+4*stride*trace;
     const float busY=row+cell*0.5f;
     DrawLineEx({left,busY},{left+5*stride-22,busY},2,Fade(draft,0.35f));
-    DrawLineEx({left,busY},{signal,busY},3,brass);
+    DrawLineEx({left,busY},{signalX,busY},3,signal);
     const char* symbols[]={"{ }","&","p","*p","++"};
     for(int i=0;i<5;++i) {
         const float px=left+i*stride;
-        const float appear=Arrival((time-0.08f-i*0.11f)/0.57f);
+        const float appear=Arrival((time-0.08f-i*0.13f)/0.68f);
         const float y=row+(1-appear)*54;
         const float cellPhase=std::clamp((trace*4-i)*3+1,0.0f,1.0f);
-        const Color fill=Blend(hero,i==4 ? brass : litSurface,cellPhase);
+        const Color fill=Blend(hero,i==4 ? signal : litSurface,cellPhase);
         const Rectangle frame{px,y,cell,cell};
         DrawLineEx({px+cell/2,row-46},{px+cell/2,row+cell+34},1,Fade(draft,0.16f*appear));
         DrawRectangleRounded(frame,0.13f,12,Fade(fill,appear));
         DrawRectangleRoundedLinesEx(frame,0.13f,12,1,Fade(seam,appear));
         const float size=cell*0.30f, tw=MeasureTextEx(mono,symbols[i],size,0.5f).x;
-        Text(symbols[i],px+(cell-tw)/2,y+(cell-size)/2,size,Fade(Blend(onDark,ink,cellPhase),appear),true);
+        Text(symbols[i],px+(cell-tw)/2,y+(cell-size)/2,size,Fade(Blend(onDark,i==4 ? onAccent : ink,cellPhase),appear),true);
         Text(TextFormat("0x%03X",0x100+i*4),px,y+cell+12,14,Fade(draft,appear),true);
-        if(time>0.8f && trace<1 && std::abs(signal-(px+cell/2))<stride*0.55f)
-            DrawLineEx({px+8,y+cell-8},{px+cell-8,y+cell-8},3,brass);
+        if(time>0.8f && trace<1 && std::abs(signalX-(px+cell/2))<stride*0.55f)
+            DrawLineEx({px+8,y+cell-8},{px+cell-8,y+cell-8},3,signal);
     }
-    if(trace>0 && trace<1) DrawCircleV({signal,busY},6,brass);
+    if(trace>0 && trace<1) DrawCircleV({signalX,busY},6,signal);
     const float titleReveal=Arrival((time-0.86f)/1.28f);
     const float titleSize=std::min(82.0f,w*0.071f);
     const float titleW=MeasureTextEx(heading,"CodePath Studio",titleSize,0.5f).x;
@@ -247,7 +247,7 @@ void DrawStudioIntro(float w,float h,float time) {
     Text(tagline,(w-MeasureTextEx(ui,tagline,18,0.5f).x)/2,h*0.395f,18,Fade(draft,Arrival((time-1.68f)/0.7f)));
     const char* skip="Click or press a key to skip";
     Rectangle badge{w/2-125,h-68,250,41};
-    DrawRectangleRounded(badge,0.65f,10,draft);
+    DrawRectangleRounded(badge,0.65f,10,litSurface);
     Text(skip,(w-MeasureTextEx(ui,skip,16,0.5f).x)/2,badge.y+11,16,ink);
 }
 
@@ -574,7 +574,7 @@ void CodeLine(const std::string& line, float x, float y, float size) {
                    (c >= 'A' && c <= 'Z') || c == '_') {
             i = line.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_",i);
             if (i == std::string::npos) i = line.size();
-            if (c >= '0' && c <= '9') color = Color{145,63,22,255};
+            if (c >= '0' && c <= '9') color = codeNumber;
             else if (keywords.find(" " + line.substr(start,i-start) + " ") != std::string::npos) color = codeType;
         }
         std::string token = line.substr(start,i-start);
@@ -1250,22 +1250,24 @@ int main(int argc, char** argv) {
     while(!WindowShouldClose()) {
         if(captureMotion) {
             demoElapsed=static_cast<float>(GetTime()-recordingStart);
-            int scene=demoElapsed<5.0f ? 0 : demoElapsed<6.2f ? 1 : demoElapsed<7.5f ? 2 :
-                      demoElapsed<12.8f ? 3 : demoElapsed<18.7f ? 4 : demoElapsed<23.0f ? 5 : 6;
+            const float sceneEnds[]={5.0f,6.2f,7.5f,12.8f,15.8f,19.5f,22.6f,25.8f,31.7f,36.0f};
+            const int scene=static_cast<int>(std::upper_bound(std::begin(sceneEnds),std::end(sceneEnds),demoElapsed)
+                                             -std::begin(sceneEnds));
             if(scene!=demoScene) {
                 demoScene=scene;
                 if(scene==1) page=Learn;
                 if(scene==2) page=Notebook;
-                if(scene==3 || scene==4) {
+                if(scene>=3 && scene<=8) {
+                    const int firstSteps[]={2,1,2,3,1,0};
                     page=Visualize;
-                    lab=scene==3 ? 0 : 5;
-                    step=scene==3 ? 2 : 0;
-                    speed=scene==3 ? 1 : 2;
+                    lab=scene-3;
+                    step=firstSteps[lab];
+                    speed=lab==0 ? 1 : 2;
                     playing=true;
                     timer=0;
                 }
-                if(scene==5) { playing=false; startQuiz({4}); }
-                if(scene==6) break;
+                if(scene==9) { playing=false; startQuiz({4}); }
+                if(scene==10) break;
             }
         }
         if(captureScreens) {
@@ -1295,7 +1297,7 @@ int main(int argc, char** argv) {
         float x=32, width=w-64, dt=GetFrameTime();
         animationDt=std::min(dt,0.05f);
         animateUi=motion;
-        introExit=motion ? std::min(1.0f,introExit+dt/0.66f) : 1.0f;
+        introExit=motion ? std::min(1.0f,introExit+dt/0.78f) : 1.0f;
         if(introTime<4 && !captureScreens) {
             bool skip=!captureMotion && (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || keyActivity || !motion);
             introTime=skip ? 4 : std::min(4.0f,introTime+dt);
@@ -1349,7 +1351,7 @@ int main(int argc, char** argv) {
         beginFrame(bg);
         DrawRectangleRec({0,0,w,57},panel);
         DrawRectangleRec({0,56,w,1},seam);
-        StudioMark({x,13},29,primary);
+        StudioMark({x,13},29,litSurface);
         Text("CodePath Studio",x+41,17,20);
         const Page navOrder[]={Home,Learn,Visualize,Notebook,Assess,Progress};
         float tabW=std::min(144.0f,(width-236)/6), navX=x+width-tabW*6;
@@ -1364,9 +1366,9 @@ int main(int argc, char** argv) {
         pageAge=motion ? pageAge+dt : 1;
         int selectedTab=static_cast<int>(std::find(std::begin(navOrder),std::end(navOrder),page)-std::begin(navOrder));
         float selectionTarget=navX+selectedTab*tabW;
-        selectionX=selectionX==0 ? selectionTarget : Approach(selectionX,selectionTarget,16);
+        selectionX=selectionX==0 ? selectionTarget : Approach(selectionX,selectionTarget,13);
         DrawRectangleRounded({selectionTarget,8,tabW-4,41},0.38f,10,
-                             Blend(panel,litSurface,0.45f+0.55f*Arrival(pageAge/0.22f)));
+                             Blend(panel,litSurface,0.30f+0.70f*Arrival(pageAge/0.30f)));
         for(int i=0;i<6;++i) {
             Page destination=navOrder[i];
             Rectangle item{navX+i*tabW,8,tabW-4,41};
@@ -1399,7 +1401,8 @@ int main(int argc, char** argv) {
         if(Button({w-x-135,footerY+5,135,32},IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE) ? "Exit fullscreen" : "Fullscreen  F11"))
             fullscreenRequested=true;
         h=footerY;
-        Text(nav[page],x,66+7*(1-Arrival(pageAge/0.26f)),32);
+        const float headingIn=Arrival(pageAge/0.34f);
+        Text(nav[page],x+13*(1-headingIn),66+4*(1-headingIn),32,Blend(muted,ink,headingIn));
         if(!saved) Text("Progress could not be saved",x,h-25,15,errorColor);
 
         const Page renderedPage=page;
@@ -1408,7 +1411,7 @@ int main(int argc, char** argv) {
             float heroY=112, heroH=h-162, heroW=width*0.67f;
             DrawRectangleRounded({x,heroY,heroW,heroH},0.09f,12,hero);
             Text("Learn by changing",x+29,heroY+25,48,WHITE);
-            Text("the state.",x+29,heroY+77,48,brass);
+            Text("the state.",x+29,heroY+77,48,signal);
             Text("A live memory experiment",x+32,heroY+145,18,draft);
             float boardY=heroY+187, boardH=heroH-297;
             PremiumLabs::DrawHomeMemory(memoryBoard,{x+23,boardY,heroW-46,boardH},motion);
@@ -1416,7 +1419,7 @@ int main(int argc, char** argv) {
             Text("POINTER ADDRESS",x+28,heroY+heroH-92,13,draft);
             Text(TextFormat("p = 0x%X",0x100+4*memoryBoard.target),x+28,heroY+heroH-70,25,WHITE,true);
             Wrap("Select a memory cell, then write through the pointer.",x+29,heroY+heroH-36,heroW-50,15,draft);
-            if(Button({x+heroW-322,heroY+heroH-90,153,40},memoryBoard.writing ? "Writing..." : "Execute ++*p",true,brass) && !memoryBoard.writing) {
+            if(Button({x+heroW-322,heroY+heroH-90,153,40},memoryBoard.writing ? "Writing..." : "Execute ++*p",true,signal) && !memoryBoard.writing) {
                 memoryBoard.pendingTarget=memoryBoard.target;
                 memoryBoard.travel=0;
                 memoryBoard.writing=true;
@@ -1528,8 +1531,12 @@ int main(int argc, char** argv) {
                     Wrap(LessonNote(current),bx+26,bodyEnd+51,readingW-55,17);
                 }
             }
-            if(lessonAge<0.26f)
-                DrawRectangleRec({contentX,by,contentW,actions-by},Fade(panel,0.68f*(1-Arrival(lessonAge/0.26f))));
+            if(lessonAge<0.38f) {
+                const float settle=Arrival(lessonAge/0.38f);
+                DrawRectangleGradientV(static_cast<int>(contentX),static_cast<int>(by),static_cast<int>(contentW),
+                                       static_cast<int>(actions-by),Fade(panel,0.38f*(1-settle)),Fade(panel,0.80f*(1-settle)));
+                DrawRectangleRec({contentX+4,by+1,(contentW-8)*settle,2},Fade(primary,1-settle));
+            }
             if(Button({bx+15,actions,112,37},"Practice",true)) startQuiz({current});
             if(Button({bx+134,actions,127,37},"Edit example")) {
 #ifdef _WIN32
@@ -1576,7 +1583,7 @@ int main(int argc, char** argv) {
                 float leftW=width*0.55f, rightX=x+leftW+14, rightW=width-leftW-14;
                 Card({x,109,leftW,h-132},panel);
                 DrawRectangleGradientV(static_cast<int>(x+1),110,static_cast<int>(leftW-2),
-                                       static_cast<int>((h-132)*0.55f),draft,panel);
+                                       static_cast<int>((h-132)*0.55f),litSurface,panel);
                 Text("Practice changes understanding.",x+25,146,32);
                 Wrap("Choose a lesson to check what you know, or take a mixed assessment across the curriculum.",
                      x+26,205,leftW-52,19);
@@ -1614,7 +1621,7 @@ int main(int argc, char** argv) {
             } else if(quiz.index>=quiz.questions.size()) {
                 Card({x,109,width,h-132},rail);
                 DrawRectangleGradientH(static_cast<int>(x+1),110,static_cast<int>(width-2),
-                                       static_cast<int>((h-132)*0.55f),draft,panel);
+                                       static_cast<int>((h-132)*0.55f),litSurface,panel);
                 Text("Assessment complete",x+30,145,32);
                 MasteryRing({x+width*0.72f,329},static_cast<float>(quiz.correct)/quiz.questions.size());
                 Text(TextFormat("%d / %d",quiz.correct,static_cast<int>(quiz.questions.size())),x+35,239,51);
@@ -1645,7 +1652,7 @@ int main(int argc, char** argv) {
                     questionKey=nextQuestionKey; quizAge=0;
                 }
                 quizAge=motion ? quizAge+dt : 1;
-                float yy=Wrap(item.question,x+24,186+10*(1-Arrival(quizAge/0.30f)),questionW-48,28,ink)+19;
+                float yy=Wrap(item.question,x+24,186+13*(1-Arrival(quizAge/0.36f)),questionW-48,28,ink)+19;
                 bool prediction=std::string(item.question)=="Predict the output.";
                 if(prediction ||
                    std::string(item.question).find("value of bytes")!=std::string::npos ||
@@ -1666,7 +1673,7 @@ int main(int argc, char** argv) {
                     } else quiz.mistakes.push_back(id);
                     saveNow();
                 };
-                if(captureMotion && demoElapsed>=20.0f && quiz.selected==-1) record(0);
+                if(captureMotion && demoElapsed>=33.0f && quiz.selected==-1) record(0);
                 if(prediction) {
                     if(quiz.selected==-1) {
                         for(int c=GetCharPressed();c>0;c=GetCharPressed())
@@ -1699,11 +1706,15 @@ int main(int argc, char** argv) {
                     if(lastAnswer!=quiz.selected) answerAge=0;
                     lastAnswer=quiz.selected;
                     answerAge=motion ? answerAge+dt : 1;
-                    const float feedback=Arrival(answerAge/0.52f);
+                    const float feedback=Ease(answerAge/0.56f);
                     const Color resultTone=quiz.selected==0 ? successColor : errorColor;
                     DrawRectangleRec({answerX-10,yy,4,54*feedback},resultTone);
                     DrawRectangleRounded({answerX-5,yy-5,answerW+5,55},0.19f,8,
                                           Fade(quiz.selected==0 ? successFill : errorFill,0.30f+0.58f*(1-feedback)));
+                    if(feedback<1) {
+                        const float edge=answerX+answerW*feedback;
+                        DrawLineEx({answerX,yy-6},{edge,yy-6},2,Fade(resultTone,1-feedback));
+                    }
                     yy=Wrap(quiz.selected==0 ? "Correct" : TextFormat("Incorrect. Correct answer: %s",item.answers[0]),
                             answerX,yy,answerW,20,
                             quiz.selected==0 ? successColor : errorColor);
@@ -1766,7 +1777,10 @@ int main(int argc, char** argv) {
             Text(outputTitle,consoleX+10,outputY-29,15,led);
             if(running) {
                 float pulse=motion ? static_cast<float>(std::fmod(GetTime()*0.6,1.0)) : 0.5f;
-                DrawRectangleRec({consoleX+pulse*(width-editorWidth-50),outputY-5,35,2},led);
+                const float track=width-editorWidth-20;
+                DrawRectangleRec({consoleX,outputY-5,track,3},seam);
+                const float sweep=motion ? 1-std::abs(2*pulse-1) : 0.5f;
+                DrawRectangleRec({consoleX+sweep*(track-49),outputY-5,49,3},signal);
             }
             editor.Draw({x,workspaceY,editorWidth,editorHeight});
             Rectangle outputBox{consoleX,outputY,width-editorWidth-14,outputHeight};
@@ -1796,13 +1810,15 @@ int main(int argc, char** argv) {
             for(int i=0;i<outputRows && i+outputScroll<static_cast<int>(lines.size());++i) {
                 const auto& output=lines[i+outputScroll];
                 Color tone=output.find("FAIL")!=std::string::npos || output.find("error ")!=std::string::npos ? terminalError :
-                           output.find("PASS")!=std::string::npos || output=="Build succeeded" ? brass : draft;
+                           output.find("PASS")!=std::string::npos || output=="Build succeeded" ? signal : draft;
                 Text(output.c_str(),outputBox.x+12,outputBox.y+10+i*20,16,tone,true);
             }
             EndScissorMode();
             if(outputAge<0.55f && !running) {
                 const float sweep=Arrival(outputAge/0.55f);
-                DrawRectangleRec({outputBox.x+13,outputY+sweep*100,outputBox.width-26,2},Fade(brass,1-sweep));
+                const Color completed=console.find("Build succeeded")!=std::string::npos ? signal : errorColor;
+                DrawRectangleRoundedLinesEx(outputBox,0.10f,10,2,Fade(completed,1-sweep));
+                DrawRectangleRec({outputBox.x+13,outputY+4,(outputBox.width-26)*sweep,2},Fade(completed,1-sweep));
             }
             Text("Ctrl+A/C/X/V  Select/copy/cut/paste   Ctrl+Z/Y  Undo/redo   Shift+wheel  Scroll sideways",
                  x,h-37,16,muted);
@@ -1820,9 +1836,9 @@ int main(int argc, char** argv) {
             float tracksW=width-featureW-22, upperH=h-top-193;
             DrawRectangleRounded({x,top,featureW,upperH},0.12f,10,hero);
             Text("Your learning",x+23,top+25,26,WHITE);
-            Text(TextFormat("%d%%",static_cast<int>(displayed*100+0.5f)),x+21,top+86,72,brass,true);
+            Text(TextFormat("%d%%",static_cast<int>(displayed*100+0.5f)),x+21,top+86,72,signal,true);
             DrawRectangleRec({x+24,top+178,featureW-48,7},draft);
-            DrawRectangleRec({x+24,top+178,(featureW-48)*displayed,7},brass);
+            DrawRectangleRec({x+24,top+178,(featureW-48)*displayed,7},signal);
             Text(TextFormat("Level %d",level),x+24,top+220,29,WHITE);
             Text(TextFormat("%d XP earned",xp),x+25,top+266,18,draft);
             Text(TextFormat("%d / %d lessons mastered",mastered,static_cast<int>(lessons.size())),x+25,top+324,17,WHITE);
@@ -1884,18 +1900,25 @@ int main(int argc, char** argv) {
             float opacity=motion ? std::min(1.0f,reward*3.5f) : 1;
             float toastX=w-214+26*lift;
             DrawRectangleRounded({toastX,62,181,38},0.34f,10,Fade(hero,opacity));
-            DrawCircleV({toastX+17,81},5,Fade(brass,opacity));
+            DrawCircleV({toastX+17,81},5,Fade(signal,opacity));
+            if(motion && reward>1.65f) {
+                float ring=Ease((2.4f-reward)/0.75f);
+                DrawCircleLinesV({toastX+17,81},6+8*ring,Fade(signal,opacity*(1-ring)));
+            }
             Text("+100 XP   /   MASTERY",toastX+29,73,15,Fade(onDark,opacity));
         }
         previousPage=renderedPage;
-        if(pageAge<0.32f)
-            DrawRectangleRec({x,103,width,h-103},Fade(bg,0.63f*(1-Arrival(pageAge/0.32f))));
+        if(pageAge<0.38f) {
+            float cover=1-Arrival(pageAge/0.38f);
+            DrawRectangleGradientH(static_cast<int>(x),103,static_cast<int>(width),static_cast<int>(h-103),
+                                   Fade(bg,0.18f*cover),Fade(bg,0.64f*cover));
+        }
         if(introExit<1) {
-            float curtain=w*(1-Arrival(introExit));
+            float curtain=w*(1-Ease(introExit));
             Clip(0,0,curtain,h+42);
             DrawStudioIntro(w,h+42,4);
             EndScissorMode();
-            DrawRectangleRec({curtain-2,0,2,h+42},brass);
+            DrawRectangleRec({curtain-2,0,2,h+42},signal);
         }
         if(captureScreens && captureIndex>=13) DrawStudioIntro(w,h+42,captureIndex==13 ? 2.75f : 1.15f);
         endFrame();
